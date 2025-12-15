@@ -26,7 +26,7 @@ class TestTwoFactorSetup:
         assert len(data["backup_codes"]) == 10
 
         # Verify secret was stored but 2FA not enabled yet
-        await db_session.refresh(verified_user)
+        db_session.refresh(verified_user)
         assert verified_user.two_factor_secret is not None
         assert verified_user.two_factor_enabled is False
 
@@ -73,7 +73,7 @@ class TestTwoFactorSetup:
         assert response.json()["status"] == "success"
 
         # Verify 2FA is now enabled
-        await db_session.refresh(verified_user)
+        db_session.refresh(verified_user)
         assert verified_user.two_factor_enabled is True
 
     @pytest.mark.asyncio
@@ -199,7 +199,7 @@ class TestTwoFactorDisable:
         assert response.json()["status"] == "success"
 
         # Verify 2FA is disabled
-        await db_session.refresh(test_user_with_2fa)
+        db_session.refresh(test_user_with_2fa)
         assert test_user_with_2fa.two_factor_enabled is False
         assert test_user_with_2fa.two_factor_secret is None
 

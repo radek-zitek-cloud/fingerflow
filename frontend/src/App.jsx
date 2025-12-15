@@ -9,6 +9,7 @@ import { useAuth } from './context/AuthContext';
 import { Navbar } from './components/layout/Navbar';
 import { AuthPage } from './components/auth/AuthPage';
 import { ProfileSettings } from './components/profile/ProfileSettings';
+import { WordSetManager } from './components/word_sets/WordSetManager';
 import { TickerTape } from './components/TickerTape';
 import { RollingWindow } from './components/RollingWindow';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
@@ -24,7 +25,7 @@ const SAMPLE_TEXT =
   'Focus on accuracy first, then gradually increase your speed.';
 
 function App() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, checkAuth } = useAuth();
   const [currentPage, setCurrentPage] = useState('home'); // 'home', 'auth', 'profile'
   const [theme, setTheme] = useState('default');
   const [viewMode, setViewMode] = useState('ticker'); // 'ticker' or 'rolling'
@@ -34,9 +35,51 @@ function App() {
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [lastKeyCode, setLastKeyCode] = useState(null);
   const [startTime, setStartTime] = useState(null);
+  const [googleCallbackStatus, setGoogleCallbackStatus] = useState(null); // 'processing', 'success', 'error'
 
   // Initialize telemetry
   const { addEvent } = useTelemetry(sessionId, sessionStartTime);
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    // Check for tokens in URL hash (from Google OAuth redirect)
+    const hash = window.location.hash.substring(1); // Remove the #
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const error = params.get('error');
+
+    if (error) {
+      setGoogleCallbackStatus('error');
+      console.error('Google OAuth error:', error);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (accessToken && refreshToken) {
+      setGoogleCallbackStatus('processing');
+      handleGoogleCallback(accessToken, refreshToken);
+    }
+  }, []);
+
+  async function handleGoogleCallback(accessToken, refreshToken) {
+    try {
+      // Store tokens
+      localStorage.setItem('auth_token', accessToken);
+      localStorage.setItem('refresh_token', refreshToken);
+
+      setGoogleCallbackStatus('success');
+
+      // Clean URL and reload auth state
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await checkAuth();
+    } catch (err) {
+      console.error('Google callback error:', err);
+      setGoogleCallbackStatus('error');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
 
   // Apply theme
   useEffect(() => {
@@ -130,19 +173,25 @@ function App() {
   const isComplete = currentIndex >= SAMPLE_TEXT.length;
   const stats = calculateStats();
 
-  if (loading) {
+  if (loading || googleCallbackStatus === 'processing') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-app)]">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p style={{ color: 'var(--text-dim)' }}>Loading...</p>
+          <p style={{ color: 'var(--text-dim)' }}>
+            {googleCallbackStatus === 'processing' ? 'Completing Google Sign In...' : 'Loading...'}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-app)]">
+    <div className="min-h-screen flex flex-col bg-[var(--bg-app)] relative overflow-hidden transition-colors duration-300">
+      {/* Background Gradient Blobs */}
+      <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[var(--accent-primary)] opacity-10 blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[var(--accent-primary)] opacity-10 blur-[120px] pointer-events-none" />
+
       <Navbar
         onNavigate={setCurrentPage}
         theme={theme}
@@ -159,143 +208,167 @@ function App() {
         <ProfileSettings />
       )}
 
+      {/* Word Sets Manager */}
+      {currentPage === 'word-sets' && isAuthenticated && (
+        <WordSetManager />
+      )}
+
       {/* Home Page / Typing Test */}
       {currentPage === 'home' && (
-        <main className="flex-1 container mx-auto p-4 md:p-8">
+        <main className="flex-1 container mx-auto p-4 md:p-8 relative z-10">
           {/* Welcome Section */}
           {!startTime && (
-            <div className="max-w-4xl mx-auto text-center py-12">
-              <h1 className="text-4xl md:text-5xl font-bold mb-4" style={{ color: 'var(--text-main)' }}>
-                Improve Your Typing
+            <div className="max-w-5xl mx-auto text-center py-16 md:py-24">
+              <div className="inline-block mb-4 px-4 py-1.5 rounded-full border border-[var(--accent-primary)] bg-[var(--accent-glow)] backdrop-blur-sm">
+                <span className="text-sm font-semibold tracking-wide" style={{ color: 'var(--accent-primary)' }}>
+                  NEXT-GEN TYPING DIAGNOSTICS
+                </span>
+              </div>
+              
+              <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight leading-tight" style={{ color: 'var(--text-main)' }}>
+                Master Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-hover)]">Flow</span>
               </h1>
-              <p className="text-lg md:text-xl mb-8" style={{ color: 'var(--text-dim)' }}>
-                Track every keystroke, analyze biomechanical data, optimize your typing efficiency
+              
+              <p className="text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+                FingerFlow captures every biomechanical nuance of your typing. 
+                Analyze dwell times, flight latency, and finger efficiency in real-time.
               </p>
 
-              {/* Features */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <Activity className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--accent-primary)' }} />
-                  <h3 className="font-semibold mb-2" style={{ color: 'var(--text-main)' }}>
-                    Real-time Tracking
-                  </h3>
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>
-                    Every keydown and keyup event captured
-                  </p>
-                </div>
+              {/* Start Button */}
+              <button
+                onClick={startSession}
+                className="group relative px-12 py-5 text-xl rounded-xl font-bold transition-all hover:scale-105 shadow-[var(--shadow-glow)]"
+                style={{
+                  backgroundColor: 'var(--accent-primary)',
+                  color: 'white',
+                }}
+              >
+                <span className="relative z-10 flex items-center gap-3">
+                  Start Diagnostics
+                  <TrendingUp className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                </span>
+                <div className="absolute inset-0 rounded-xl bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
+              </button>
 
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <Target className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--accent-primary)' }} />
-                  <h3 className="font-semibold mb-2" style={{ color: 'var(--text-main)' }}>
-                    Finger Analysis
-                  </h3>
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>
-                    Per-finger performance metrics
-                  </p>
-                </div>
-
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <TrendingUp className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--accent-primary)' }} />
-                  <h3 className="font-semibold mb-2" style={{ color: 'var(--text-main)' }}>
-                    Biomechanics
-                  </h3>
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>
-                    Dwell time, flight time, transitions
-                  </p>
-                </div>
-
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <Trophy className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--accent-primary)' }} />
-                  <h3 className="font-semibold mb-2" style={{ color: 'var(--text-main)' }}>
-                    Track Progress
-                  </h3>
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>
-                    Historical data and trends
-                  </p>
-                </div>
-              </div>
+              {!isAuthenticated && (
+                <p className="mt-6 text-sm font-medium" style={{ color: 'var(--text-dim)' }}>
+                  <button
+                    onClick={() => setCurrentPage('auth')}
+                    className="underline hover:text-[var(--accent-primary)] transition-colors"
+                  >
+                    Sign in
+                  </button>
+                  {' '}to save detailed analytics
+                </p>
+              )}
 
               {/* View Mode Selector */}
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-center mb-8">
-                <label className="font-medium" style={{ color: 'var(--text-main)' }}>
-                  View Mode:
-                </label>
-                <div className="flex gap-2">
+              <div className="mt-16 flex flex-col md:flex-row gap-4 items-center justify-center">
+                <div className="p-1 rounded-xl glass-panel flex gap-1">
                   <button
                     onClick={() => setViewMode('ticker')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                      viewMode === 'ticker' ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--key-bg)]'
+                    className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+                      viewMode === 'ticker' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'hover:bg-[var(--bg-input)]'
                     }`}
-                    style={viewMode !== 'ticker' ? { color: 'var(--text-main)' } : {}}
+                    style={viewMode !== 'ticker' ? { color: 'var(--text-dim)' } : {}}
                   >
                     Ticker Tape
                   </button>
                   <button
                     onClick={() => setViewMode('rolling')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                      viewMode === 'rolling' ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--key-bg)]'
+                    className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+                      viewMode === 'rolling' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'hover:bg-[var(--bg-input)]'
                     }`}
-                    style={viewMode !== 'rolling' ? { color: 'var(--text-main)' } : {}}
+                    style={viewMode !== 'rolling' ? { color: 'var(--text-dim)' } : {}}
                   >
                     Rolling Window
                   </button>
                 </div>
               </div>
 
-              {/* Start Button */}
-              <button
-                onClick={startSession}
-                className="px-12 py-4 text-xl rounded-lg font-semibold transition-all hover:opacity-90 hover:scale-105"
-                style={{
-                  backgroundColor: 'var(--accent-primary)',
-                  color: 'white',
-                }}
-              >
-                Start Typing Test
-              </button>
+              {/* Features Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-20">
+                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
+                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
+                    <Activity className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                  </div>
+                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
+                    Latency Tracking
+                  </h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+                    Precision measurement of keydown-to-keyup intervals.
+                  </p>
+                </div>
 
-              {!isAuthenticated && (
-                <p className="mt-4 text-sm" style={{ color: 'var(--text-dim)' }}>
-                  <button
-                    onClick={() => setCurrentPage('auth')}
-                    className="underline hover:opacity-70"
-                    style={{ color: 'var(--accent-primary)' }}
-                  >
-                    Sign in
-                  </button>
-                  {' '}to save your sessions and track progress
-                </p>
-              )}
+                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
+                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
+                    <Target className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                  </div>
+                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
+                    Finger Mapping
+                  </h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+                    Heatmaps and efficiency scores for each finger.
+                  </p>
+                </div>
+
+                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
+                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
+                    <TrendingUp className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                  </div>
+                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
+                    Biomechanics
+                  </h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+                    Analyze flight time and digraph transitions.
+                  </p>
+                </div>
+
+                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
+                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
+                    <Trophy className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                  </div>
+                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
+                    Skill Evolution
+                  </h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+                    Watch your motor memory improve over time.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
           {/* Typing Area */}
           {startTime && !isComplete && (
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-6xl mx-auto py-12">
               {/* Stats Header */}
-              <div className="flex justify-between items-center mb-8 p-4 bg-[var(--bg-panel)] rounded-lg">
-                <div className="text-center flex-1">
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>WPM</p>
-                  <p className="text-3xl font-bold" style={{ color: 'var(--accent-primary)' }}>
+              <div className="flex justify-between items-center mb-10 p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)]">
+                <div className="text-center flex-1 border-r border-[var(--bg-input)]">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>WPM</p>
+                  <p className="text-4xl font-black" style={{ color: 'var(--accent-primary)' }}>
                     {stats.wpm}
                   </p>
                 </div>
-                <div className="text-center flex-1">
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
-                  <p className="text-3xl font-bold" style={{ color: 'var(--status-correct)' }}>
+                <div className="text-center flex-1 border-r border-[var(--bg-input)]">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
+                  <p className="text-4xl font-black" style={{ color: 'var(--status-correct)' }}>
                     {stats.accuracy}%
                   </p>
                 </div>
                 <div className="text-center flex-1">
-                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Progress</p>
-                  <p className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Progress</p>
+                  <p className="text-4xl font-black" style={{ color: 'var(--text-main)' }}>
                     {Math.round((currentIndex / SAMPLE_TEXT.length) * 100)}%
                   </p>
                 </div>
               </div>
 
               {/* Typing Display */}
-              <div className="mb-8">
+              <div className="mb-12 relative">
+                 {/* Focus Guide Line (Optional visual aid) */}
+                 <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[var(--accent-primary)] opacity-20 transform -translate-x-1/2 pointer-events-none z-0" />
+                 
                 {viewMode === 'ticker' ? (
                   <TickerTape
                     text={SAMPLE_TEXT}
@@ -312,19 +385,21 @@ function App() {
               </div>
 
               {/* Virtual Keyboard */}
-              <VirtualKeyboard activeKey={lastKeyCode} />
+              <div className="mb-10">
+                <VirtualKeyboard activeKey={lastKeyCode} />
+              </div>
 
               {/* End Test Button */}
-              <div className="text-center mt-8">
+              <div className="text-center">
                 <button
                   onClick={endSession}
-                  className="px-6 py-2 rounded-lg border-2 hover:bg-[var(--bg-input)] transition-all"
+                  className="px-8 py-2.5 rounded-lg border hover:bg-[var(--bg-input)] transition-colors font-medium text-sm tracking-wide"
                   style={{
                     borderColor: 'var(--key-border)',
-                    color: 'var(--text-main)',
+                    color: 'var(--text-dim)',
                   }}
                 >
-                  End Test
+                  ABORT SESSION
                 </button>
               </div>
             </div>
@@ -332,37 +407,45 @@ function App() {
 
           {/* Results Screen */}
           {isComplete && (
-            <div className="max-w-2xl mx-auto text-center py-12">
-              <div className="mb-8">
-                <Trophy className="w-20 h-20 mx-auto mb-4" style={{ color: 'var(--accent-primary)' }} />
-                <h2 className="text-4xl font-bold mb-2" style={{ color: 'var(--text-main)' }}>
-                  Test Complete!
+            <div className="max-w-3xl mx-auto text-center py-20">
+              <div className="mb-12 celebrate-icon">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-[var(--accent-glow)] flex items-center justify-center">
+                  <Trophy className="w-12 h-12" style={{ color: 'var(--accent-primary)' }} />
+                </div>
+                <h2 className="text-5xl font-bold mb-4" style={{ color: 'var(--text-main)' }}>
+                  Session Complete
                 </h2>
-                <p style={{ color: 'var(--text-dim)' }}>Great job on completing the typing test</p>
+                <p className="text-xl" style={{ color: 'var(--text-dim)' }}>Analysis report generated successfully.</p>
               </div>
 
               {/* Final Stats */}
-              <div className="grid grid-cols-2 gap-6 mb-8">
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <p className="text-sm mb-2" style={{ color: 'var(--text-dim)' }}>Words Per Minute</p>
-                  <p className="text-5xl font-bold" style={{ color: 'var(--accent-primary)' }}>
-                    {stats.wpm}
-                  </p>
+              <div className="grid grid-cols-2 gap-6 mb-12">
+                <div className="p-8 glass-panel rounded-2xl">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Net Speed</p>
+                  <div className="flex items-baseline justify-center gap-2">
+                    <p className="text-6xl font-black" style={{ color: 'var(--accent-primary)' }}>
+                      {stats.wpm}
+                    </p>
+                    <span className="text-lg font-medium opacity-60" style={{ color: 'var(--text-main)' }}>WPM</span>
+                  </div>
                 </div>
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <p className="text-sm mb-2" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
-                  <p className="text-5xl font-bold" style={{ color: 'var(--status-correct)' }}>
-                    {stats.accuracy}%
-                  </p>
+                <div className="p-8 glass-panel rounded-2xl">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
+                  <div className="flex items-baseline justify-center gap-2">
+                    <p className="text-6xl font-black" style={{ color: 'var(--status-correct)' }}>
+                      {stats.accuracy}
+                    </p>
+                    <span className="text-lg font-medium opacity-60" style={{ color: 'var(--status-correct)' }}>%</span>
+                  </div>
                 </div>
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <p className="text-sm mb-2" style={{ color: 'var(--text-dim)' }}>Correct Keystrokes</p>
+                <div className="p-6 glass-panel rounded-2xl">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Correct Keystrokes</p>
                   <p className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
                     {stats.correctCount}
                   </p>
                 </div>
-                <div className="p-6 bg-[var(--bg-panel)] rounded-lg">
-                  <p className="text-sm mb-2" style={{ color: 'var(--text-dim)' }}>Errors</p>
+                <div className="p-6 glass-panel rounded-2xl">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Errors</p>
                   <p className="text-3xl font-bold" style={{ color: 'var(--status-error)' }}>
                     {stats.errorCount}
                   </p>
@@ -373,24 +456,24 @@ function App() {
               <div className="flex gap-4 justify-center">
                 <button
                   onClick={endSession}
-                  className="px-8 py-3 rounded-lg font-semibold transition-all hover:opacity-90"
+                  className="px-10 py-4 rounded-xl font-bold text-lg transition-all hover:scale-105 shadow-[var(--shadow-glow)]"
                   style={{
                     backgroundColor: 'var(--accent-primary)',
                     color: 'white',
                   }}
                 >
-                  Try Again
+                  Start New Session
                 </button>
                 {!isAuthenticated && (
                   <button
                     onClick={() => setCurrentPage('auth')}
-                    className="px-8 py-3 rounded-lg font-semibold border-2 transition-all hover:bg-[var(--bg-input)]"
+                    className="px-10 py-4 rounded-xl font-bold text-lg border-2 transition-all hover:bg-[var(--accent-glow)]"
                     style={{
                       borderColor: 'var(--accent-primary)',
                       color: 'var(--accent-primary)',
                     }}
                   >
-                    Sign In to Save
+                    Save & Analyze
                   </button>
                 )}
               </div>
@@ -400,11 +483,10 @@ function App() {
       )}
 
       {/* Footer */}
-      <footer className="py-6 text-center border-t" style={{ borderColor: 'var(--key-border)', color: 'var(--text-dim)' }}>
-        <p className="text-sm">FingerFlow - Biomechanical Typing Diagnostics</p>
+      <footer className="py-8 text-center border-t relative z-10" style={{ borderColor: 'var(--key-border)', color: 'var(--text-dim)' }}>
+        <p className="text-sm font-medium">FingerFlow v1.3.0 &bull; Biomechanical Typing Diagnostics</p>
       </footer>
     </div>
-  );
-}
+  );}
 
 export default App;

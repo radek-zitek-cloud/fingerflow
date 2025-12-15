@@ -29,7 +29,7 @@ class TestRegistration:
         assert data["token_type"] == "bearer"
 
         # Verify user was created with email_verified=False
-        result = await db_session.execute(
+        result = db_session.execute(
             select(User).where(User.email == "test@example.com")
         )
         user = result.scalar_one_or_none()
@@ -37,7 +37,7 @@ class TestRegistration:
         assert user.email_verified is False
 
         # Verify email verification token was created
-        result = await db_session.execute(
+        result = db_session.execute(
             select(EmailVerificationToken).where(
                 EmailVerificationToken.user_id == user.id
             )
@@ -72,7 +72,7 @@ class TestEmailVerification:
             expires_at=9999999999000,  # Far future
         )
         db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         # Verify email
         response = await client.post(
@@ -84,12 +84,12 @@ class TestEmailVerification:
         assert response.json()["status"] == "success"
 
         # Check user is now verified
-        await db_session.refresh(test_user)
+        db_session.refresh(test_user)
         assert test_user.email_verified is True
         assert test_user.email_verified_at is not None
 
         # Check token is marked as used
-        await db_session.refresh(token)
+        db_session.refresh(token)
         assert token.used is True
 
     @pytest.mark.asyncio
@@ -114,7 +114,7 @@ class TestEmailVerification:
             expires_at=1000000001000,  # Already expired
         )
         db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         response = await client.post(
             "/auth/verify-email",
@@ -136,7 +136,7 @@ class TestEmailVerification:
         assert response.json()["status"] == "success"
 
         # Verify new token was created
-        result = await db_session.execute(
+        result = db_session.execute(
             select(EmailVerificationToken).where(
                 EmailVerificationToken.user_id == test_user.id,
                 EmailVerificationToken.used == False,
@@ -161,7 +161,7 @@ class TestRefreshTokens:
             device_info="Test Device",
         )
         db_session.add(refresh_token)
-        await db_session.commit()
+        db_session.commit()
 
         # Refresh tokens
         response = await client.post(
@@ -175,11 +175,11 @@ class TestRefreshTokens:
         assert "refresh_token" in data
 
         # Verify old token is revoked
-        await db_session.refresh(refresh_token)
+        db_session.refresh(refresh_token)
         assert refresh_token.revoked is True
 
         # Verify new token was created
-        result = await db_session.execute(
+        result = db_session.execute(
             select(RefreshToken).where(
                 RefreshToken.user_id == test_user.id,
                 RefreshToken.revoked == False,
@@ -211,7 +211,7 @@ class TestRefreshTokens:
             device_info="Test Device",
         )
         db_session.add(refresh_token)
-        await db_session.commit()
+        db_session.commit()
 
         # Revoke token
         response = await client.post(
@@ -223,7 +223,7 @@ class TestRefreshTokens:
         assert response.json()["status"] == "success"
 
         # Verify token is revoked
-        await db_session.refresh(refresh_token)
+        db_session.refresh(refresh_token)
         assert refresh_token.revoked is True
 
     @pytest.mark.asyncio
@@ -239,7 +239,7 @@ class TestRefreshTokens:
                 device_info=f"Device {i}",
             )
             db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         # List sessions
         response = await client.get("/auth/sessions", headers=auth_headers)

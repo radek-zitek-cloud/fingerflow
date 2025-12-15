@@ -1,279 +1,279 @@
 # FingerFlow Quick Start Guide
 
-## ✅ Backend Status: READY
+This guide will help you start the backend and frontend and test the authentication system.
 
-The backend is fully configured and ready to run!
+## Prerequisites
 
-### Start Backend Server
+Make sure you have:
+- Python 3.10+ installed
+- Node.js 18+ installed
+- PostgreSQL or SQLite for the database
+
+## Backend Setup
+
+### 1. Install Python Dependencies
 
 ```bash
 cd backend
-./start.sh
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Or manually:
+### 2. Configure Environment
+
+Create a `.env` file in the `backend` directory:
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file with your settings. Minimum required configuration:
+
+```env
+# Security
+SECRET_KEY=your-super-secret-key-change-this-in-production
+
+# Database
+DATABASE_URL=sqlite:///./data/fingerflow.db
+
+# JWT
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Google OAuth2 (Optional - leave empty if not using)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+
+# Email (Optional - use console for development)
+EMAIL_PROVIDER=console
+```
+
+### 3. Start the Backend
+
 ```bash
 cd backend
-source .venv/bin/activate
-uvicorn main:app --reload
+source venv/bin/activate  # If not already activated
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Backend will be available at:**
-- API: http://localhost:8000
-- Interactive API Docs: http://localhost:8000/docs
-- Health Check: http://localhost:8000/health
+You should see:
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process
+INFO:     Started server process
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+```
 
-### Available API Endpoints
+### 4. Test Backend Health
 
-**Authentication:**
-- `POST /auth/register` - Register new user
-- `POST /auth/login` - Login with credentials
-- `GET /auth/me` - Get current user info
-- `GET /auth/google/login` - Google OAuth (stub)
+In a new terminal:
 
-**Sessions:**
-- `POST /api/sessions` - Create typing session
-- `GET /api/sessions` - List user sessions
-- `GET /api/sessions/{id}` - Get session details
-- `PATCH /api/sessions/{id}/end` - End session with metrics
-
-**Telemetry:**
-- `POST /api/sessions/{id}/telemetry` - Ingest keystroke events (bulk)
-
-**System:**
-- `POST /api/system/logs` - Centralized logging proxy
-- `GET /api/system/health` - System health check
-
-## ⏳ Frontend Status: Needs Node.js
-
-### Install Node.js
-
-You'll need Node.js 18+ to run the frontend. Install it using one of these methods:
-
-**Using nvm (recommended):**
 ```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-source ~/.bashrc
-nvm install 18
-nvm use 18
+curl http://localhost:8000/health
 ```
 
-**Using apt (Ubuntu/Debian):**
-```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
+Expected response:
+```json
+{"status":"healthy","database":"connected","logging":"configured"}
 ```
 
-**Using dnf (Fedora):**
-```bash
-sudo dnf install nodejs
-```
+## Frontend Setup
 
-### Install Frontend Dependencies
+### 1. Install Node Dependencies
 
-Once Node.js is installed:
 ```bash
 cd frontend
 npm install
-npm run dev
 ```
 
-**Frontend will be available at:**
-- http://localhost:5173
+### 2. Configure Environment
 
-## 🚀 Development Workflow
-
-### Option 1: Run Backend Only (Testing API)
+Create a `.env` file in the `frontend` directory:
 
 ```bash
-cd backend
-./start.sh
+cp .env.example .env
 ```
 
-Then test the API:
-```bash
-# Health check
-curl http://localhost:8000/health
+Edit `.env`:
 
-# Register a user
-curl -X POST http://localhost:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@example.com", "password": "testpass123"}'
+```env
+VITE_API_URL=http://localhost:8000
 ```
 
-### Option 2: Run Full Stack (Once Node.js is installed)
+### 3. Start the Frontend
 
-```bash
-# From project root
-./start-dev.sh
-```
-
-This will start both backend and frontend in tmux (if available) or in the background.
-
-### Option 3: Manual Start (Both Services)
-
-**Terminal 1 (Backend):**
-```bash
-cd backend
-source .venv/bin/activate
-uvicorn main:app --reload
-```
-
-**Terminal 2 (Frontend):**
 ```bash
 cd frontend
 npm run dev
 ```
 
-## 📊 Current Implementation Status
+You should see:
+```
+VITE v5.x.x  ready in xxx ms
 
-### ✅ Completed Features
-
-**Backend:**
-- FastAPI application with async support
-- SQLAlchemy 2.0+ models (User, TypingSession, TelemetryEvent)
-- JWT authentication system
-- Bulk telemetry ingestion (performance optimized)
-- Centralized logging proxy
-- Structured JSON logging with structlog
-- Database indexes for analytics queries
-
-**Frontend (Structure Ready):**
-- React 18 application scaffold
-- CSS Variables theming system (3 themes)
-- Ticker Tape component (horizontal scrolling)
-- Rolling Window component (vertical scrolling)
-- Virtual Keyboard component
-- Telemetry buffering hook (useTelemetry)
-- API client service layer
-
-### ⏳ TODO for Production
-
-- [ ] Complete typing test logic (WPM calculation in real-time)
-- [ ] Authentication UI (login/register forms)
-- [ ] Analytics dashboard (biomechanical metrics visualization)
-- [ ] Text corpus selection
-- [ ] User profile and settings
-- [ ] Complete Google OAuth flow
-- [ ] Unit and integration tests
-- [ ] Database migrations (Alembic)
-- [ ] Production deployment configuration
-
-## 🧪 Testing the Backend
-
-### Using the Interactive API Docs
-
-1. Start the backend server
-2. Open http://localhost:8000/docs
-3. Try the endpoints:
-   - Register a user via `/auth/register`
-   - Login via `/auth/login` (copy the access_token)
-   - Click "Authorize" and paste the token
-   - Create a session via `/api/sessions`
-   - Send telemetry data
-
-### Using curl
-
-```bash
-# Register
-TOKEN=$(curl -X POST http://localhost:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}' | jq -r '.access_token')
-
-# Create session
-SESSION=$(curl -X POST http://localhost:8000/api/sessions \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"start_time\": $(date +%s)000}" | jq -r '.id')
-
-# Send telemetry
-curl -X POST http://localhost:8000/api/sessions/$SESSION/telemetry \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "events": [
-      {
-        "event_type": "DOWN",
-        "key_code": "KeyH",
-        "timestamp_offset": 0,
-        "finger_used": "R_INDEX",
-        "is_error": false
-      },
-      {
-        "event_type": "UP",
-        "key_code": "KeyH",
-        "timestamp_offset": 100,
-        "finger_used": "R_INDEX",
-        "is_error": false
-      }
-    ]
-  }'
+➜  Local:   http://localhost:5173/
+➜  Network: use --host to expose
 ```
 
-## 🔧 Troubleshooting
+## Test Authentication
+
+### 1. Open the Application
+
+Navigate to http://localhost:5173 in your browser.
+
+### 2. Test User Registration
+
+1. Click "Sign in" → "Create one" to go to registration
+2. Enter an email (e.g., `test@example.com`)
+3. Enter a password (must meet requirements: 8+ chars, uppercase, lowercase, number)
+4. Confirm password
+5. Click "Create Account"
+
+You should be automatically logged in after registration.
+
+### 3. Verify Authentication
+
+After registration, you should see:
+- Your email in the navigation bar
+- The navbar should show "Profile" and "Logout" options
+
+### 4. Test Login
+
+1. Click "Logout"
+2. Click the user icon to log in again
+3. Enter your email and password
+4. Click "Sign In"
+
+### 5. Test Google OAuth (if configured)
+
+1. Set up Google OAuth credentials (see AUTHENTICATION.md)
+2. Add credentials to backend `.env`
+3. Restart backend
+4. Click "Sign in with Google" on the login page
+5. Authenticate with your Google account
+
+## Troubleshooting
 
 ### Backend Issues
 
-**"email-validator not installed"**
+**Error: "No module named 'sqlalchemy'"**
 ```bash
 cd backend
-source .venv/bin/activate
-pip install email-validator
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-**"ModuleNotFoundError: No module named 'app'"**
-Make sure you're in the `backend` directory when running uvicorn.
+**Error: "Could not connect to database"**
+- Check DATABASE_URL in `.env`
+- Ensure the `data/` directory exists: `mkdir -p data`
 
-**Database errors**
-The SQLite database will be created automatically. Check that you have write permissions in the `backend` directory.
+**Error: "Secret key is not set"**
+- Set SECRET_KEY in `.env` to a random string
+- Generate one: `python3 -c "import secrets; print(secrets.token_hex(32))"`
 
 ### Frontend Issues
 
-**"npm: command not found"**
-Install Node.js first (see above).
+**Error: "Failed to fetch"**
+- Ensure backend is running on port 8000
+- Check VITE_API_URL in frontend `.env`
+- Check browser console for CORS errors
 
-**Port 5173 already in use**
-Kill the existing process:
+**403 Forbidden on /auth/me**
+- This happens when the auth token is invalid or expired
+- Try logging out and logging in again
+- Check backend logs for JWT validation errors
+- Ensure SECRET_KEY is the same between restarts
+
+### Database Issues
+
+**Users not being created**
+1. Check backend logs for errors during registration
+2. Verify database file exists: `ls -la backend/data/`
+3. Check database tables:
+   ```bash
+   cd backend
+   source venv/bin/activate
+   python3 -c "from app.database import engine; from sqlalchemy import inspect; print(inspect(engine).get_table_names())"
+   ```
+
+**To reset the database:**
 ```bash
-lsof -ti:5173 | xargs kill -9
+cd backend
+rm -f data/fingerflow.db
+# Restart backend - it will recreate tables
 ```
 
-## 📁 Project Structure
+## Common Test Scenarios
 
-```
-fingerflow/
-├── backend/              ✅ READY
-│   ├── app/
-│   │   ├── models/      # SQLAlchemy models
-│   │   ├── routes/      # API endpoints
-│   │   ├── schemas/     # Pydantic schemas
-│   │   └── utils/       # Auth helpers
-│   ├── main.py          # FastAPI app
-│   ├── start.sh         # Startup script
-│   └── .env             # Configuration
-├── frontend/            ⏳ NEEDS NODE.JS
-│   ├── src/
-│   │   ├── components/  # React components
-│   │   ├── hooks/       # Custom hooks
-│   │   ├── services/    # API client
-│   │   └── styles/      # CSS themes
-│   └── package.json
-├── start-dev.sh         # Full stack startup
-├── verify-setup.sh      # Setup verification
-└── QUICKSTART.md        # This file
+### 1. Test Email Verification Flow
+
+```bash
+# In backend, set EMAIL_PROVIDER=console in .env
+# Register a new user
+# Check backend terminal for verification link
+# The link will be printed to console
 ```
 
-## 🎯 Next Steps
+### 2. Test Password Reset
 
-1. **Start Backend** - The backend is ready to run now
-2. **Install Node.js** - Required for frontend development
-3. **Install Frontend Dependencies** - `cd frontend && npm install`
-4. **Start Full Stack** - `./start-dev.sh`
-5. **Open Browser** - Navigate to http://localhost:5173
+1. Go to login page
+2. Click "Forgot password?"
+3. Enter your email
+4. Check backend console for reset link
 
----
+### 3. Test 2FA Setup
 
-**Questions or Issues?**
-- Check the main README.md for architecture details
-- Review CLAUDE.md for development guidelines
-- See docs/master_spec.md for full specification
+1. Log in
+2. Go to Profile
+3. Enable Two-Factor Authentication
+4. Scan QR code with authenticator app
+5. Enter code to verify
+6. Log out and log in again (you'll be prompted for 2FA code)
+
+## Viewing Logs
+
+### Backend Logs
+
+The backend uses structured JSON logging. Watch logs in real-time:
+
+```bash
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --log-level debug
+```
+
+### Frontend Logs
+
+Open browser Developer Tools (F12) and check:
+- Console tab for JavaScript logs
+- Network tab for API requests
+- Application tab → Local Storage to see stored tokens
+
+## API Documentation
+
+Once the backend is running, visit:
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+You can test all API endpoints directly from Swagger UI.
+
+## Next Steps
+
+- Read [AUTHENTICATION.md](./AUTHENTICATION.md) for detailed auth documentation
+- Read [DOCKER.md](./DOCKER.md) for containerized deployment
+- Read [CLAUDE.md](./CLAUDE.md) for development guidelines
+- Read `docs/master_spec.md` for full technical specification
+
+## Getting Help
+
+If you encounter issues:
+
+1. Check backend logs for errors
+2. Check frontend browser console for errors
+3. Verify all environment variables are set correctly
+4. Ensure all dependencies are installed
+5. Try resetting the database if data seems corrupted

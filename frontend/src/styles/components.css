@@ -4,10 +4,32 @@
  * Additional styling for form inputs, buttons, and interactive elements
  */
 
+/* Glassmorphism Utilities */
+.glass-panel {
+  background-color: rgba(var(--bg-panel-rgb), 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: var(--shadow-md);
+}
+
+.glass-nav {
+  background-color: rgba(var(--bg-app-rgb), 0.8); /* Falls back if var missing */
+  background-color: rgba(var(--bg-panel-rgb), 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 /* Form Inputs */
 .input-field {
   outline: none;
   font-size: 1rem;
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
 }
 
 .input-field:focus {
@@ -18,11 +40,18 @@
 /* Buttons */
 button {
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+button:active {
+  transform: scale(0.98);
 }
 
 button:disabled {
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* Loading Spinner */
@@ -35,16 +64,18 @@ button:disabled {
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-10px) scale(0.95);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 .dropdown-menu {
-  animation: slideDown 0.2s ease-out;
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Focus visible for keyboard navigation */
@@ -55,7 +86,7 @@ button:disabled {
 
 /* Smooth transitions for theme changes */
 * {
-  transition-property: background-color, border-color, color;
+  transition-property: background-color, border-color, color, box-shadow;
   transition-duration: 200ms;
   transition-timing-function: ease;
 }
@@ -65,42 +96,39 @@ button:disabled {
   transition: width 0.3s ease, background-color 0.3s ease;
 }
 
-/* Results celebration */
-@keyframes celebrate {
-  0% {
-    transform: scale(0.8);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.celebrate-icon {
-  animation: celebrate 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-
 /* Card hover effects */
 .feature-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .feature-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
+  border-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(var(--bg-panel-rgb), 0.9);
 }
 
-/* Responsive utilities */
-@media (max-width: 768px) {
-  .text-4xl {
-    font-size: 2rem;
-  }
+/* Typography Enhancements */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.025em; /* Tight tracking for headings */
+}
 
-  .text-5xl {
-    font-size: 2.5rem;
-  }
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-input);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
 }

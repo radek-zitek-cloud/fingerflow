@@ -11,7 +11,6 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional
-import aiosmtplib
 
 from app.config import settings
 from app.logging_config import get_logger
@@ -27,7 +26,7 @@ class EmailService:
         self.from_email = settings.email_from
         self.from_name = settings.email_from_name
 
-    async def send_email(
+    def send_email(
         self,
         to_email: str,
         subject: str,
@@ -48,12 +47,12 @@ class EmailService:
         """
         try:
             if self.provider == "smtp":
-                return await self._send_smtp(to_email, subject, html_body, text_body)
+                return self._send_smtp(to_email, subject, html_body, text_body)
             elif self.provider == "sendgrid":
-                return await self._send_sendgrid(to_email, subject, html_body, text_body)
+                return self._send_sendgrid(to_email, subject, html_body, text_body)
             elif self.provider == "console":
                 # Console provider for development - just log the email
-                return await self._send_console(to_email, subject, html_body, text_body)
+                return self._send_console(to_email, subject, html_body, text_body)
             else:
                 logger.error("email_send_failed", reason="unknown_provider", provider=self.provider)
                 return False
@@ -62,7 +61,7 @@ class EmailService:
             logger.error("email_send_exception", error=str(e), to_email=to_email)
             return False
 
-    async def _send_smtp(
+    def _send_smtp(
         self, to_email: str, subject: str, html_body: str, text_body: Optional[str]
     ) -> bool:
         """Send email using SMTP."""
@@ -79,15 +78,20 @@ class EmailService:
             # Add HTML part
             message.attach(MIMEText(html_body, "html"))
 
-            # Send email
-            await aiosmtplib.send(
-                message,
-                hostname=settings.smtp_host,
-                port=settings.smtp_port,
-                username=settings.smtp_username,
-                password=settings.smtp_password,
-                use_tls=settings.smtp_use_tls,
-            )
+            # Send email (sync)
+            if settings.smtp_use_tls:
+                server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=10)
+            else:
+                server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10)
+
+            try:
+                if not settings.smtp_use_tls:
+                    server.starttls()
+                if settings.smtp_username:
+                    server.login(settings.smtp_username, settings.smtp_password)
+                server.sendmail(self.from_email, [to_email], message.as_string())
+            finally:
+                server.quit()
 
             logger.info("email_sent_smtp", to_email=to_email, subject=subject)
             return True
@@ -96,7 +100,7 @@ class EmailService:
             logger.error("smtp_send_failed", error=str(e), to_email=to_email)
             return False
 
-    async def _send_sendgrid(
+    def _send_sendgrid(
         self, to_email: str, subject: str, html_body: str, text_body: Optional[str]
     ) -> bool:
         """Send email using SendGrid API."""
@@ -110,7 +114,7 @@ class EmailService:
             logger.error("sendgrid_send_failed", error=str(e), to_email=to_email)
             return False
 
-    async def _send_console(
+    def _send_console(
         self, to_email: str, subject: str, html_body: str, text_body: Optional[str]
     ) -> bool:
         """Log email to console (for development)."""
@@ -128,7 +132,7 @@ class EmailService:
         print("=" * 80 + "\n")
         return True
 
-    async def send_verification_email(self, to_email: str, token: str) -> bool:
+    def send_verification_email(self, to_email: str, token: str) -> bool:
         """Send email verification link."""
         verification_url = f"{settings.frontend_url}/verify-email?token={token}"
 
@@ -170,9 +174,9 @@ class EmailService:
         If you didn't create an account, you can safely ignore this email.
         """
 
-        return await self.send_email(to_email, "Verify Your Email - FingerFlow", html_body, text_body)
+        return self.send_email(to_email, "Verify Your Email - FingerFlow", html_body, text_body)
 
-    async def send_password_reset_email(self, to_email: str, token: str) -> bool:
+    def send_password_reset_email(self, to_email: str, token: str) -> bool:
         """Send password reset link."""
         reset_url = f"{settings.frontend_url}/reset-password?token={token}"
 
@@ -214,9 +218,9 @@ class EmailService:
         If you didn't request a password reset, you can safely ignore this email.
         """
 
-        return await self.send_email(to_email, "Reset Your Password - FingerFlow", html_body, text_body)
+        return self.send_email(to_email, "Reset Your Password - FingerFlow", html_body, text_body)
 
-    async def send_2fa_code_email(self, to_email: str, code: str) -> bool:
+    def send_2fa_code_email(self, to_email: str, code: str) -> bool:
         """Send 2FA backup code email."""
         html_body = f"""
         <html>
@@ -249,7 +253,43 @@ class EmailService:
         If you didn't request this code, please secure your account immediately.
         """
 
-        return await self.send_email(to_email, "Your 2FA Code - FingerFlow", html_body, text_body)
+        return self.send_email(to_email, "Your 2FA Code - FingerFlow", html_body, text_body)
+
+    def send_2fa_backup_codes_email(self, to_email: str, codes: List[str]) -> bool:
+        """Send 2FA backup codes email."""
+        codes_list = "\n".join(f"- {c}" for c in codes)
+        codes_html = "".join(f"<li><code>{c}</code></li>" for c in codes)
+
+        html_body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #4a9eff;">Your 2FA Backup Codes</h2>
+                <p>Store these backup codes in a safe place. Each code can be used once.</p>
+                <ul style="font-family: monospace; font-size: 16px; line-height: 1.8;">
+                    {codes_html}
+                </ul>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px;">
+                    If you didn't enable two-factor authentication, please secure your account immediately.
+                </p>
+            </body>
+        </html>
+        """
+
+        text_body = f"""
+        Your 2FA Backup Codes
+
+        Store these backup codes in a safe place. Each code can be used once:
+
+        {codes_list}
+        """
+
+        return self.send_email(
+            to_email,
+            "Your 2FA Backup Codes - FingerFlow",
+            html_body,
+            text_body,
+        )
 
 
 # Global email service instance

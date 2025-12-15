@@ -3,6 +3,7 @@ from sqlalchemy import BigInteger, Float, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List
 from app.database import Base
+from app.models._types import BIGINT_FK, BIGINT_PK
 
 
 class TypingSession(Base):
@@ -15,9 +16,9 @@ class TypingSession(Base):
 
     __tablename__ = "typing_sessions"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_FK,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True

@@ -151,6 +151,10 @@ export const authAPI = {
     return fetchWithAuth('/auth/sessions');
   },
 
+  async googleLogin() {
+    return fetchWithAuth('/auth/google/login');
+  },
+
   logout() {
     clearAuthToken();
     localStorage.removeItem('refresh_token');
@@ -289,6 +293,39 @@ export const twoFactorAPI = {
 
   async getStatus() {
     return fetchWithAuth('/api/2fa/status');
+  },
+};
+
+/**
+ * Word Sets API
+ */
+export const wordSetsAPI = {
+  async list(skip = 0, limit = 100) {
+    return fetchWithAuth(`/api/word-sets?skip=${skip}&limit=${limit}`);
+  },
+
+  async get(setId) {
+    return fetchWithAuth(`/api/word-sets/${setId}`);
+  },
+
+  async create(name, description, words) {
+    return fetchWithAuth('/api/word-sets/', {
+      method: 'POST',
+      body: JSON.stringify({ name, description, words }),
+    });
+  },
+
+  async update(setId, name, description, words) {
+    return fetchWithAuth(`/api/word-sets/${setId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, description, words }),
+    });
+  },
+
+  async delete(setId) {
+    return fetchWithAuth(`/api/word-sets/${setId}`, {
+      method: 'DELETE',
+    });
   },
 };
 

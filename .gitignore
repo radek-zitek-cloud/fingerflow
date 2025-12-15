@@ -60,3 +60,10 @@ htmlcov/
 
 # OS
 Thumbs.db
+
+# Docker
+.env
+*.db
+data/
+.dockerignore
+docker-compose.override.yml

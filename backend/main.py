@@ -4,6 +4,8 @@ FingerFlow Backend - FastAPI Application
 Main entry point for the FingerFlow typing diagnostics application.
 This server acts as both an API backend and a centralized logging proxy.
 """
+import os
+import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -28,7 +30,9 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("application_startup", message="Initializing FingerFlow backend")
-    await init_db()
+    # Avoid touching real local DB during tests (prevents sqlite file locks and keeps tests hermetic).
+    if "pytest" not in sys.modules:
+        init_db()
     logger.info("database_initialized", message="Database tables created/verified")
 
     yield
@@ -81,16 +85,16 @@ async def health_check():
 
 
 # Import and include routers
-from app.routes import auth, sessions, telemetry, system, users, two_factor
+from app.routes import sessions, telemetry, system, users, two_factor, word_sets
 from app.routes import auth_complete
 
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(auth_complete.router, prefix="/auth", tags=["Authentication"])
 app.include_router(two_factor.router, prefix="/api/2fa", tags=["Two-Factor Auth"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["Sessions"])
 app.include_router(telemetry.router, prefix="/api", tags=["Telemetry"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(word_sets.router, prefix="/api/word-sets", tags=["Word Sets"])
 
 
 if __name__ == "__main__":
