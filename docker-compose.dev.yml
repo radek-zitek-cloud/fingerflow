@@ -1,10 +1,9 @@
 # Development override for Docker Compose
 # Use: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
-version: '3.8'
-
 services:
   backend:
+    image: fingerflow-backend:dev
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
@@ -19,6 +18,7 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
+    image: fingerflow-frontend:dev
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
@@ -30,3 +30,9 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000
     command: npm run dev -- --host 0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5173 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

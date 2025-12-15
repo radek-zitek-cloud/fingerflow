@@ -18,10 +18,22 @@ echo ""
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
-# Check if --remove flag is passed
+# Parse arguments
 REMOVE_VOLUMES=false
-if [ "$1" == "--remove" ] || [ "$1" == "-r" ]; then
-    REMOVE_VOLUMES=true
+DEV_MODE=false
+
+for arg in "$@"; do
+    case $arg in
+        --remove|-r)
+            REMOVE_VOLUMES=true
+            ;;
+        --dev|-d)
+            DEV_MODE=true
+            ;;
+    esac
+done
+
+if [ "$REMOVE_VOLUMES" = true ]; then
     echo -e "${RED}Stopping services and removing volumes...${NC}"
 else
     echo -e "${YELLOW}Stopping services...${NC}"
@@ -29,14 +41,32 @@ fi
 
 echo ""
 
+# Build docker compose command
+if [ "$DEV_MODE" = true ]; then
+    COMPOSE_FILES="-f docker-compose.yml -f docker-compose.dev.yml"
+    echo -e "${BLUE}Stopping development containers...${NC}"
+else
+    # Stop both dev and prod to be safe
+    COMPOSE_FILES="-f docker-compose.yml"
+    echo -e "${BLUE}Stopping production containers...${NC}"
+fi
+
 # Stop containers
 if [ "$REMOVE_VOLUMES" = true ]; then
-    docker compose down -v
+    docker compose $COMPOSE_FILES down -v
+    # Also try to stop dev containers if stopping prod
+    if [ "$DEV_MODE" = false ]; then
+        docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v 2>/dev/null || true
+    fi
     echo ""
     echo -e "${GREEN}✓ Services stopped and volumes removed!${NC}"
     echo -e "${RED}⚠ All data has been deleted!${NC}"
 else
-    docker compose down
+    docker compose $COMPOSE_FILES down
+    # Also try to stop dev containers if stopping prod
+    if [ "$DEV_MODE" = false ]; then
+        docker compose -f docker-compose.yml -f docker-compose.dev.yml down 2>/dev/null || true
+    fi
     echo ""
     echo -e "${GREEN}✓ Services stopped!${NC}"
     echo -e "${BLUE}Data volumes preserved${NC}"
@@ -44,7 +74,9 @@ fi
 
 echo ""
 echo -e "${BLUE}To start services again:${NC}"
-echo -e "  ./scripts/start.sh"
+echo -e "  ./scripts/start.sh         ${NC}# Production mode"
+echo -e "  ./scripts/start.sh --dev   ${NC}# Development mode"
 echo ""
-echo -e "${BLUE}To remove volumes:${NC}"
-echo -e "  ./scripts/stop.sh --remove"
+echo -e "${BLUE}Options:${NC}"
+echo -e "  --dev, -d     Stop development containers"
+echo -e "  --remove, -r  Stop and remove volumes (deletes all data)"

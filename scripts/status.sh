@@ -18,9 +18,20 @@ echo ""
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
+# Try to detect which mode is running by checking for dev containers
+DEV_RUNNING=false
+if docker ps --format '{{.Image}}' | grep -q 'fingerflow.*:dev'; then
+    DEV_RUNNING=true
+fi
+
 # Check if containers are running
 echo -e "${BLUE}Container Status:${NC}"
-docker compose ps
+if [ "$DEV_RUNNING" = true ]; then
+    echo -e "${YELLOW}[Development Mode Detected]${NC}"
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+else
+    docker compose -f docker-compose.yml ps
+fi
 
 echo ""
 echo -e "${BLUE}Health Checks:${NC}"

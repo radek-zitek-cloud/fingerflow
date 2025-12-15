@@ -47,9 +47,9 @@ else
     echo ""
 
     if [ "$DETACHED" = true ]; then
-        docker compose up -d
+        docker compose -f docker-compose.yml up -d
     else
-        docker compose up
+        docker compose -f docker-compose.yml up
     fi
 fi
 

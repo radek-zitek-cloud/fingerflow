@@ -18,11 +18,15 @@ cd "$(dirname "$0")/.."
 # Parse arguments
 FOLLOW=true
 SERVICE=""
+DEV_MODE=false
 
 for arg in "$@"; do
     case $arg in
         --no-follow|-n)
             FOLLOW=false
+            ;;
+        --dev|-d)
+            DEV_MODE=true
             ;;
         backend|frontend)
             SERVICE=$arg
@@ -30,11 +34,17 @@ for arg in "$@"; do
     esac
 done
 
-# Build docker compose command
-if [ "$FOLLOW" = true ]; then
-    LOGS_CMD="docker compose logs -f"
+# Build docker compose command with appropriate files
+if [ "$DEV_MODE" = true ]; then
+    COMPOSE_FILES="-f docker-compose.yml -f docker-compose.dev.yml"
 else
-    LOGS_CMD="docker compose logs"
+    COMPOSE_FILES="-f docker-compose.yml"
+fi
+
+if [ "$FOLLOW" = true ]; then
+    LOGS_CMD="docker compose $COMPOSE_FILES logs -f"
+else
+    LOGS_CMD="docker compose $COMPOSE_FILES logs"
 fi
 
 # Add service if specified
@@ -46,6 +56,11 @@ else
 fi
 
 echo ""
+if [ "$DEV_MODE" = true ]; then
+    echo -e "${BLUE}Viewing development logs...${NC}"
+else
+    echo -e "${BLUE}Viewing production logs...${NC}"
+fi
 echo -e "${BLUE}Press Ctrl+C to exit${NC}"
 echo ""
 

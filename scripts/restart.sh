@@ -37,7 +37,7 @@ if [ "$DEV_MODE" = true ]; then
     COMPOSE_FILES="-f docker-compose.yml -f docker-compose.dev.yml"
 else
     echo -e "${YELLOW}Restarting in PRODUCTION mode...${NC}"
-    COMPOSE_FILES=""
+    COMPOSE_FILES="-f docker-compose.yml"
 fi
 
 echo ""
