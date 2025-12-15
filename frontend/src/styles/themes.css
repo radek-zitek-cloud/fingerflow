@@ -1,0 +1,119 @@
+/**
+ * FingerFlow Theme System - CSS Variables
+ *
+ * CRITICAL: All colors MUST use CSS Variables (Custom Properties).
+ * Tailwind CSS is used ONLY for layout geometry (grid, flex, padding, margin).
+ *
+ * This ensures a consistent theming system that can be switched dynamically
+ * via the [data-theme] attribute on the root element.
+ */
+
+/* Default Theme (Dark) */
+:root {
+  /* Backgrounds */
+  --bg-app: #0a0a0f;
+  --bg-panel: #1a1a24;
+  --bg-input: #252530;
+
+  /* Typography */
+  --text-main: #e0e0e6;
+  --text-dim: #808090;
+  --text-pending: #606070;
+
+  /* Accent & Highlights */
+  --accent-primary: #4a9eff;
+  --accent-glow: rgba(74, 158, 255, 0.3);
+  --accent-hover: #5faeff;
+
+  /* Status Colors */
+  --status-correct: #00d084;
+  --status-error: #ff4757;
+  --status-current: #ffdd57;
+
+  /* Virtual Keyboard */
+  --key-bg: #2a2a35;
+  --key-active: var(--accent-primary);
+  --key-border: #3a3a45;
+
+  /* Transitions */
+  --transition-fast: 100ms;
+  --transition-smooth: 300ms;
+}
+
+/* Light Theme (Paper) */
+[data-theme="paper"] {
+  /* Backgrounds */
+  --bg-app: #f5f5f0;
+  --bg-panel: #ffffff;
+  --bg-input: #fafafa;
+
+  /* Typography */
+  --text-main: #1a1a1f;
+  --text-dim: #606060;
+  --text-pending: #a0a0a0;
+
+  /* Accent & Highlights */
+  --accent-primary: #2563eb;
+  --accent-glow: rgba(37, 99, 235, 0.2);
+  --accent-hover: #1d4ed8;
+
+  /* Status Colors */
+  --status-correct: #059669;
+  --status-error: #dc2626;
+  --status-current: #d97706;
+
+  /* Virtual Keyboard */
+  --key-bg: #e5e5e0;
+  --key-active: var(--accent-primary);
+  --key-border: #d0d0c8;
+}
+
+/* High Contrast Theme */
+[data-theme="high-contrast"] {
+  /* Backgrounds */
+  --bg-app: #000000;
+  --bg-panel: #111111;
+  --bg-input: #1a1a1a;
+
+  /* Typography */
+  --text-main: #ffffff;
+  --text-dim: #b0b0b0;
+  --text-pending: #707070;
+
+  /* Accent & Highlights */
+  --accent-primary: #00ff00;
+  --accent-glow: rgba(0, 255, 0, 0.4);
+  --accent-hover: #33ff33;
+
+  /* Status Colors */
+  --status-correct: #00ff00;
+  --status-error: #ff0000;
+  --status-current: #ffff00;
+
+  /* Virtual Keyboard */
+  --key-bg: #1a1a1a;
+  --key-active: var(--accent-primary);
+  --key-border: #333333;
+}
+
+/* Global Resets & Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  transition: background-color var(--transition-smooth), color var(--transition-smooth);
+}
+
+code, pre {
+  font-family: 'Fira Code', 'Courier New', monospace;
+}

@@ -1,0 +1,101 @@
+/**
+ * FingerFlow Animations
+ *
+ * Defines smooth animations for the typing interface.
+ * All animations must be performant (<16ms) to avoid input lag.
+ */
+
+/* Flash effect on error */
+@keyframes flash-error {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: var(--status-error);
+    opacity: 0.1;
+  }
+}
+
+.flash-error {
+  animation: flash-error 200ms ease-out;
+}
+
+/* Pulse effect for current character */
+@keyframes pulse-current {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.character-current {
+  position: relative;
+  color: var(--status-current);
+  font-weight: 600;
+}
+
+.character-current::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background-color: var(--accent-glow);
+  border-radius: 2px;
+  z-index: -1;
+  animation: pulse-current 1.5s ease-in-out infinite;
+}
+
+/* Character state colors */
+.character-pending {
+  color: var(--text-pending);
+}
+
+.character-correct {
+  color: var(--status-correct);
+}
+
+.character-error {
+  color: var(--status-error);
+  font-weight: 600;
+}
+
+/* Smooth scrolling for Ticker Tape mode */
+.ticker-tape-container {
+  transition: transform var(--transition-fast) linear;
+}
+
+/* Smooth scrolling for Rolling Window mode */
+.rolling-window-container {
+  transition: transform var(--transition-smooth) cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Virtual keyboard key press effect */
+@keyframes key-press {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+}
+
+.key-active {
+  animation: key-press 150ms ease-out;
+  background-color: var(--key-active);
+  color: white;
+}
+
+/* Fade in/out for lines in Rolling Window */
+.line-inactive {
+  opacity: 0.5;
+  transition: opacity var(--transition-smooth);
+}
+
+.line-active {
+  opacity: 1;
+  transition: opacity var(--transition-smooth);
+}

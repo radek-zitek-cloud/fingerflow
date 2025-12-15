@@ -1,0 +1,37 @@
+/**
+ * Main stylesheet - imports all style modules
+ */
+
+/* CSS Variable themes - MUST be imported first */
+@import './themes.css';
+
+/* Animations */
+@import './animations.css';
+
+/* Component styles */
+@import './components.css';
+
+/* Tailwind base directives (layout geometry only) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Additional global styles */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Prevent layout shift during theme transitions */
+html {
+  color-scheme: dark;
+}
+
+[data-theme="paper"] {
+  color-scheme: light;
+}
+
+[data-theme="high-contrast"] {
+  color-scheme: dark;
+}
