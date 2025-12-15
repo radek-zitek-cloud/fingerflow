@@ -4,6 +4,7 @@ from sqlalchemy import String, BigInteger, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List
 from app.database import Base
+from app.models._types import BIGINT_PK
 
 
 class User(Base):
@@ -16,7 +17,7 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     auth_provider: Mapped[str] = mapped_column(

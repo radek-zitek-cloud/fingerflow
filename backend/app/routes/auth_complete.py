@@ -12,7 +12,8 @@ import time
 from datetime import timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from pydantic import BaseModel, EmailStr
 
@@ -69,11 +70,11 @@ class SessionInfo(BaseModel):
     is_current: bool
 
 
-@router.post("/register", response_model=TokenWithRefresh, status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Register a new user with email and password.
@@ -81,7 +82,7 @@ async def register(
     Sends email verification link and returns tokens.
     """
     # Check if user already exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
+    result = db.execute(select(User).where(User.email == user_data.email))
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
@@ -102,8 +103,8 @@ async def register(
     )
 
     db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
+    db.commit()
+    db.refresh(new_user)
 
     logger.info("user_registered", user_id=new_user.id, email=new_user.email)
 
@@ -115,10 +116,10 @@ async def register(
         expires_at=int(time.time() * 1000) + (24 * 60 * 60 * 1000),  # 24 hours
     )
     db.add(verification_token)
-    await db.commit()
+    db.commit()
 
     # Send verification email
-    await email_service.send_verification_email(new_user.email, verification_token.token)
+    email_service.send_verification_email(new_user.email, verification_token.token)
 
     # Create tokens
     access_token = create_access_token(
@@ -134,13 +135,19 @@ async def register(
         device_info=request.headers.get("user-agent", "Unknown")[:255],
     )
     db.add(refresh_token)
-    await db.commit()
+    db.commit()
 
     logger.info("tokens_created", user_id=new_user.id)
 
-    return TokenWithRefresh(
+    response = TokenWithRefresh(
         access_token=access_token,
         refresh_token=refresh_token.token,
+    )
+    logger.info("registration_response_built", user_id=new_user.id)
+
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content=response.model_dump(),
     )
 
 
@@ -148,7 +155,7 @@ async def register(
 async def login(
     user_data: UserLogin,
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Login with email and password.
@@ -157,7 +164,7 @@ async def login(
     If 2FA is enabled, returns temp token for 2FA verification.
     """
     # Find user by email
-    result = await db.execute(select(User).where(User.email == user_data.email))
+    result = db.execute(select(User).where(User.email == user_data.email))
     user = result.scalar_one_or_none()
 
     if not user or user.auth_provider != "local":
@@ -208,7 +215,7 @@ async def login(
         device_info=request.headers.get("user-agent", "Unknown")[:255],
     )
     db.add(refresh_token)
-    await db.commit()
+    db.commit()
 
     return TokenWithRefresh(
         access_token=access_token,
@@ -220,7 +227,7 @@ async def login(
 async def verify_2fa(
     verify_data: TwoFactorVerifyRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Verify 2FA code during login.
@@ -253,7 +260,7 @@ async def verify_2fa(
         )
 
     # Get user
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user or not user.two_factor_enabled:
@@ -277,7 +284,7 @@ async def verify_2fa(
             )
             if code_valid:
                 user.two_factor_backup_codes = updated_codes
-                await db.commit()
+                db.commit()
 
     if not code_valid:
         logger.warning("2fa_verification_failed", user_id=user.id)
@@ -302,7 +309,7 @@ async def verify_2fa(
         device_info=request.headers.get("user-agent", "Unknown")[:255],
     )
     db.add(refresh_token)
-    await db.commit()
+    db.commit()
 
     return TokenWithRefresh(
         access_token=access_token,
@@ -313,11 +320,11 @@ async def verify_2fa(
 @router.post("/verify-email")
 async def verify_email(
     verify_data: EmailVerificationRequest,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Verify email address with token."""
     # Find token
-    result = await db.execute(
+    result = db.execute(
         select(EmailVerificationToken).where(
             EmailVerificationToken.token == verify_data.token
         )
@@ -337,7 +344,7 @@ async def verify_email(
         )
 
     # Get user
-    result = await db.execute(select(User).where(User.id == token.user_id))
+    result = db.execute(select(User).where(User.id == token.user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -351,7 +358,7 @@ async def verify_email(
     user.email_verified_at = int(time.time() * 1000)
     token.used = True
 
-    await db.commit()
+    db.commit()
 
     logger.info("email_verified", user_id=user.id, email=user.email)
 
@@ -364,11 +371,11 @@ async def verify_email(
 @router.post("/resend-verification")
 async def resend_verification(
     resend_data: ResendVerificationRequest,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Resend email verification link."""
     # Find user
-    result = await db.execute(select(User).where(User.email == resend_data.email))
+    result = db.execute(select(User).where(User.email == resend_data.email))
     user = result.scalar_one_or_none()
 
     # Always return success to prevent email enumeration
@@ -387,7 +394,7 @@ async def resend_verification(
         }
 
     # Invalidate old tokens
-    await db.execute(
+    db.execute(
         delete(EmailVerificationToken).where(
             EmailVerificationToken.user_id == user.id,
             EmailVerificationToken.used == False
@@ -402,10 +409,10 @@ async def resend_verification(
         expires_at=int(time.time() * 1000) + (24 * 60 * 60 * 1000),
     )
     db.add(verification_token)
-    await db.commit()
+    db.commit()
 
     # Send email
-    await email_service.send_verification_email(user.email, verification_token.token)
+    email_service.send_verification_email(user.email, verification_token.token)
 
     logger.info("verification_email_resent", user_id=user.id)
 
@@ -419,11 +426,11 @@ async def resend_verification(
 async def refresh_access_token(
     refresh_data: RefreshTokenRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Get new access token using refresh token."""
     # Find refresh token
-    result = await db.execute(
+    result = db.execute(
         select(RefreshToken).where(RefreshToken.token == refresh_data.refresh_token)
     )
     token = result.scalar_one_or_none()
@@ -435,7 +442,7 @@ async def refresh_access_token(
         )
 
     # Get user
-    result = await db.execute(select(User).where(User.id == token.user_id))
+    result = db.execute(select(User).where(User.id == token.user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -461,7 +468,7 @@ async def refresh_access_token(
         device_info=request.headers.get("user-agent", "Unknown")[:255],
     )
     db.add(new_refresh_token)
-    await db.commit()
+    db.commit()
 
     logger.info("tokens_refreshed", user_id=user.id)
 
@@ -474,18 +481,18 @@ async def refresh_access_token(
 @router.post("/revoke")
 async def revoke_refresh_token(
     refresh_data: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Revoke a refresh token (logout from specific device)."""
     # Find and revoke token
-    result = await db.execute(
+    result = db.execute(
         select(RefreshToken).where(RefreshToken.token == refresh_data.refresh_token)
     )
     token = result.scalar_one_or_none()
 
     if token:
         token.revoked = True
-        await db.commit()
+        db.commit()
         logger.info("refresh_token_revoked", user_id=token.user_id)
 
     return {
@@ -497,11 +504,11 @@ async def revoke_refresh_token(
 @router.get("/sessions", response_model=list[SessionInfo])
 async def list_sessions(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """List all active sessions (refresh tokens) for current user."""
     # Get all valid refresh tokens
-    result = await db.execute(
+    result = db.execute(
         select(RefreshToken).where(
             RefreshToken.user_id == current_user.id,
             RefreshToken.revoked == False

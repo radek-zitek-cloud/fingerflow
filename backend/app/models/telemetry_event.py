@@ -3,6 +3,7 @@ import enum
 from sqlalchemy import BigInteger, String, Integer, Boolean, Enum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+from app.models._types import BIGINT_FK, BIGINT_PK
 
 
 class EventType(str, enum.Enum):
@@ -47,9 +48,9 @@ class TelemetryEvent(Base):
 
     __tablename__ = "telemetry_events"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     session_id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_FK,
         ForeignKey("typing_sessions.id", ondelete="CASCADE"),
         nullable=False,
         index=True

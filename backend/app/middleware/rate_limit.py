@@ -5,9 +5,7 @@ Implements sliding window rate limiting to prevent abuse.
 """
 import time
 from collections import defaultdict
-from typing import Dict, Tuple
-from fastapi import Request, HTTPException, status
-from starlette.middleware.base import BaseHTTPMiddleware
+from typing import Dict, Callable, Awaitable
 
 from app.config import settings
 from app.logging_config import get_logger
@@ -15,7 +13,7 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
+class RateLimitMiddleware:
     """
     Rate limiting middleware using sliding window algorithm.
 
@@ -23,48 +21,71 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(self, app):
-        super().__init__(app)
+        self.app = app
         # Store: {ip_address: [(timestamp, count)]}
         self.request_counts: Dict[str, list] = defaultdict(list)
         self.enabled = settings.rate_limit_enabled
         self.max_requests = settings.rate_limit_requests
         self.window_seconds = settings.rate_limit_window_seconds
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
         if not self.enabled:
-            return await call_next(request)
+            return await self.app(scope, receive, send)
 
         # Get client IP
-        client_ip = request.client.host
+        client = scope.get("client")
+        client_ip = client[0] if client else "unknown"
+        path = scope.get("path", "")
+        method = scope.get("method", "")
 
         # Skip rate limiting for health checks
-        if request.url.path in ["/health", "/"]:
-            return await call_next(request)
+        if path in ["/health", "/"]:
+            return await self.app(scope, receive, send)
 
         # Check rate limit
         if not self._is_allowed(client_ip):
             logger.warning(
                 "rate_limit_exceeded",
                 ip=client_ip,
-                path=request.url.path,
-                method=request.method
+                path=path,
+                method=method,
             )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many requests. Limit: {self.max_requests} per {self.window_seconds}s",
-                headers={"Retry-After": str(self.window_seconds)}
+            body = (
+                f'{{"detail":"Too many requests. Limit: {self.max_requests} per {self.window_seconds}s"}}'
+            ).encode("utf-8")
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"retry-after", str(self.window_seconds).encode("ascii")),
+                    ],
+                }
             )
+            await send({"type": "http.response.body", "body": body, "more_body": False})
+            return
 
-        # Process request
-        response = await call_next(request)
-
-        # Add rate limit headers
         remaining = self._get_remaining(client_ip)
-        response.headers["X-RateLimit-Limit"] = str(self.max_requests)
-        response.headers["X-RateLimit-Remaining"] = str(remaining)
-        response.headers["X-RateLimit-Reset"] = str(int(time.time()) + self.window_seconds)
+        reset = str(int(time.time()) + self.window_seconds).encode("ascii")
 
-        return response
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(
+                    [
+                        (b"x-ratelimit-limit", str(self.max_requests).encode("ascii")),
+                        (b"x-ratelimit-remaining", str(remaining).encode("ascii")),
+                        (b"x-ratelimit-reset", reset),
+                    ]
+                )
+                message["headers"] = headers
+            await send(message)
+
+        return await self.app(scope, receive, send_with_headers)
 
     def _is_allowed(self, ip: str) -> bool:
         """Check if request is allowed based on rate limit."""

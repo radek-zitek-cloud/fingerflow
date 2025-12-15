@@ -292,6 +292,39 @@ export const twoFactorAPI = {
   },
 };
 
+/**
+ * Word Sets API
+ */
+export const wordSetsAPI = {
+  async list(skip = 0, limit = 100) {
+    return fetchWithAuth(`/api/word-sets?skip=${skip}&limit=${limit}`);
+  },
+
+  async get(setId) {
+    return fetchWithAuth(`/api/word-sets/${setId}`);
+  },
+
+  async create(name, description, words) {
+    return fetchWithAuth('/api/word-sets/', {
+      method: 'POST',
+      body: JSON.stringify({ name, description, words }),
+    });
+  },
+
+  async update(setId, name, description, words) {
+    return fetchWithAuth(`/api/word-sets/${setId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, description, words }),
+    });
+  },
+
+  async delete(setId) {
+    return fetchWithAuth(`/api/word-sets/${setId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 // Export convenience functions for components
 export const verifyEmail = (token) => authAPI.verifyEmail(token);
 export const resendVerificationEmail = (email) => authAPI.resendVerification(email);

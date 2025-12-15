@@ -5,6 +5,7 @@ from sqlalchemy import String, BigInteger, ForeignKey, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional
 from app.database import Base
+from app.models._types import BIGINT_FK, BIGINT_PK
 
 
 class PasswordResetToken(Base):
@@ -16,9 +17,9 @@ class PasswordResetToken(Base):
 
     __tablename__ = "password_reset_tokens"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_FK,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
@@ -79,9 +80,9 @@ class EmailVerificationToken(Base):
 
     __tablename__ = "email_verification_tokens"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_FK,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
@@ -140,9 +141,9 @@ class RefreshToken(Base):
 
     __tablename__ = "refresh_tokens"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger,
+        BIGINT_FK,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True

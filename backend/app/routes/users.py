@@ -1,7 +1,7 @@
 """User profile and password management routes."""
 import time
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from pydantic import BaseModel, EmailStr
 
@@ -42,7 +42,7 @@ class PasswordReset(BaseModel):
 async def update_profile(
     profile_data: ProfileUpdate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Update user profile information.
@@ -51,7 +51,7 @@ async def update_profile(
     """
     # Check if email is already taken by another user
     from sqlalchemy import select
-    result = await db.execute(
+    result = db.execute(
         select(User).where(
             User.email == profile_data.email,
             User.id != current_user.id
@@ -73,8 +73,8 @@ async def update_profile(
 
     # Update email
     current_user.email = profile_data.email
-    await db.commit()
-    await db.refresh(current_user)
+    db.commit()
+    db.refresh(current_user)
 
     logger.info(
         "profile_updated",
@@ -93,7 +93,7 @@ async def update_profile(
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Change user password.
@@ -122,7 +122,7 @@ async def change_password(
 
     # Update password
     current_user.hashed_password = get_password_hash(password_data.new_password)
-    await db.commit()
+    db.commit()
 
     logger.info(
         "password_changed",
@@ -139,7 +139,7 @@ async def change_password(
 @router.post("/forgot-password")
 async def forgot_password(
     reset_data: PasswordResetRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Request a password reset.
@@ -148,7 +148,7 @@ async def forgot_password(
     Always returns success to prevent email enumeration.
     """
     # Find user by email
-    result = await db.execute(select(User).where(User.email == reset_data.email))
+    result = db.execute(select(User).where(User.email == reset_data.email))
     user = result.scalar_one_or_none()
 
     # Always return success to prevent email enumeration attacks
@@ -172,14 +172,12 @@ async def forgot_password(
             "message": "If an account exists with this email, you will receive password reset instructions",
         }
 
-    # Invalidate any existing reset tokens for this user
-    await db.execute(
-        delete(PasswordResetToken).where(
-            PasswordResetToken.user_id == user.id,
-            PasswordResetToken.used == False
-        )
+    # Invalidate any existing reset tokens for this user.
+    # Delete all tokens (used or unused) so that only the most recent request remains valid.
+    db.execute(
+        delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     )
-    await db.commit()
+    db.commit()
 
     # Create new password reset token
     reset_token = PasswordResetToken(
@@ -189,10 +187,10 @@ async def forgot_password(
         expires_at=int(time.time() * 1000) + (60 * 60 * 1000),  # 1 hour
     )
     db.add(reset_token)
-    await db.commit()
+    db.commit()
 
     # Send password reset email
-    await email_service.send_password_reset_email(user.email, reset_token.token)
+    email_service.send_password_reset_email(user.email, reset_token.token)
 
     logger.info("password_reset_email_sent", user_id=user.id, email=user.email)
 
@@ -205,7 +203,7 @@ async def forgot_password(
 @router.post("/reset-password")
 async def reset_password(
     reset_data: PasswordReset,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Reset password using a token.
@@ -214,7 +212,7 @@ async def reset_password(
     Token is single-use and expires after 1 hour.
     """
     # Find token
-    result = await db.execute(
+    result = db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token == reset_data.token)
     )
     token = result.scalar_one_or_none()
@@ -237,10 +235,10 @@ async def reset_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset token",
-        )
+    )
 
     # Get user
-    result = await db.execute(select(User).where(User.id == token.user_id))
+    result = db.execute(select(User).where(User.id == token.user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -268,7 +266,7 @@ async def reset_password(
     # Mark token as used
     token.used = True
 
-    await db.commit()
+    db.commit()
 
     logger.info("password_reset_successful", user_id=user.id, email=user.email)
 

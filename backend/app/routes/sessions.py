@@ -1,6 +1,6 @@
 """Routes for managing typing sessions."""
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import List
 
@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 async def create_session(
     session_data: SessionCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Create a new typing session for the current user.
@@ -35,8 +35,8 @@ async def create_session(
     )
 
     db.add(new_session)
-    await db.commit()
-    await db.refresh(new_session)
+    db.commit()
+    db.refresh(new_session)
 
     logger.info(
         "session_created",
@@ -52,14 +52,14 @@ async def create_session(
 async def get_session(
     session_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Get a specific typing session by ID.
 
     Users can only access their own sessions.
     """
-    result = await db.execute(
+    result = db.execute(
         select(TypingSession).where(
             TypingSession.id == session_id,
             TypingSession.user_id == current_user.id,
@@ -79,7 +79,7 @@ async def get_session(
 @router.get("", response_model=List[SessionResponse])
 async def list_sessions(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     limit: int = 20,
     offset: int = 0,
 ):
@@ -88,7 +88,7 @@ async def list_sessions(
 
     Supports pagination via limit and offset parameters.
     """
-    result = await db.execute(
+    result = db.execute(
         select(TypingSession)
         .where(TypingSession.user_id == current_user.id)
         .order_by(TypingSession.start_time.desc())
@@ -107,14 +107,14 @@ async def end_session(
     wpm: float,
     accuracy: float,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Mark a session as completed and update final metrics.
 
     The frontend should call this when the user finishes typing.
     """
-    result = await db.execute(
+    result = db.execute(
         select(TypingSession).where(
             TypingSession.id == session_id,
             TypingSession.user_id == current_user.id,
@@ -132,8 +132,8 @@ async def end_session(
     session.wpm = wpm
     session.accuracy = accuracy
 
-    await db.commit()
-    await db.refresh(session)
+    db.commit()
+    db.refresh(session)
 
     logger.info(
         "session_ended",

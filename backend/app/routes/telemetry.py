@@ -1,6 +1,6 @@
 """Routes for telemetry event ingestion (PERFORMANCE CRITICAL)."""
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.database import get_db
@@ -20,7 +20,7 @@ async def ingest_telemetry(
     session_id: int,
     batch: TelemetryBatch,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Ingest a batch of telemetry events (PERFORMANCE CRITICAL ENDPOINT).
@@ -39,7 +39,7 @@ async def ingest_telemetry(
     - On page unload (using navigator.sendBeacon)
     """
     # Validate that session exists and belongs to current user
-    result = await db.execute(
+    result = db.execute(
         select(TypingSession).where(
             TypingSession.id == session_id,
             TypingSession.user_id == current_user.id,
@@ -75,7 +75,7 @@ async def ingest_telemetry(
 
     # Bulk insert - this is MUCH faster than adding one by one
     db.add_all(telemetry_events)
-    await db.commit()
+    db.commit()
 
     logger.info(
         "telemetry_batch_ingested",
