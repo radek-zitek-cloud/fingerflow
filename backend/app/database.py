@@ -107,8 +107,13 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-async def get_db() -> Session:
-    """FastAPI dependency for getting a database session."""
+def get_db() -> Session:
+    """
+    FastAPI dependency for getting a database session.
+
+    Note: This is intentionally synchronous. FastAPI will run sync dependencies
+    in a thread pool, preventing blocking of the async event loop.
+    """
     session = SessionLocal()
     try:
         yield session

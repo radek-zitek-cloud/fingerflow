@@ -190,9 +190,16 @@ async def forgot_password(
     db.commit()
 
     # Send password reset email
-    email_service.send_password_reset_email(user.email, reset_token.token)
+    email_sent = email_service.send_password_reset_email(user.email, reset_token.token)
+    if not email_sent:
+        logger.warning(
+            "password_reset_email_failed",
+            user_id=user.id,
+            email=user.email,
+            reason="Email service failed to send password reset email"
+        )
 
-    logger.info("password_reset_email_sent", user_id=user.id, email=user.email)
+    logger.info("password_reset_email_sent", user_id=user.id, email=user.email, email_sent=email_sent)
 
     return {
         "status": "success",

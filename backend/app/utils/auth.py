@@ -12,6 +12,9 @@ from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import TokenData
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # HTTP Bearer token scheme
 security = HTTPBearer()
@@ -84,20 +87,19 @@ async def get_current_user(
 
     try:
         token = credentials.credentials
-        # print(f"DEBUG: Validating token: {token[:10]}...") 
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
 
         user_id: int = payload.get("user_id")
         email: str = payload.get("email")
 
         if user_id is None or email is None:
-            print("DEBUG: Token missing user_id or email")
+            logger.warning("jwt_validation_failed", reason="missing_user_id_or_email")
             raise credentials_exception
 
         token_data = TokenData(user_id=user_id, email=email)
 
     except JWTError as e:
-        print(f"DEBUG: JWTError: {str(e)}")
+        logger.warning("jwt_decode_error", error=str(e))
         raise credentials_exception
 
     # Fetch user from database
@@ -105,7 +107,7 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if user is None:
-        print(f"DEBUG: User {token_data.user_id} not found in DB")
+        logger.warning("user_not_found", user_id=token_data.user_id)
         raise credentials_exception
 
     return user

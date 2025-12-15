@@ -118,8 +118,15 @@ async def register(
     db.add(verification_token)
     db.commit()
 
-    # Send verification email
-    email_service.send_verification_email(new_user.email, verification_token.token)
+    # Send verification email (non-blocking - user can still register if email fails)
+    email_sent = email_service.send_verification_email(new_user.email, verification_token.token)
+    if not email_sent:
+        logger.warning(
+            "verification_email_failed",
+            user_id=new_user.id,
+            email=new_user.email,
+            reason="Email service failed to send verification email"
+        )
 
     # Create tokens
     access_token = create_access_token(
@@ -412,9 +419,16 @@ async def resend_verification(
     db.commit()
 
     # Send email
-    email_service.send_verification_email(user.email, verification_token.token)
+    email_sent = email_service.send_verification_email(user.email, verification_token.token)
+    if not email_sent:
+        logger.warning(
+            "verification_email_resend_failed",
+            user_id=user.id,
+            email=user.email,
+            reason="Email service failed to send verification email"
+        )
 
-    logger.info("verification_email_resent", user_id=user.id)
+    logger.info("verification_email_resent", user_id=user.id, email_sent=email_sent)
 
     return {
         "status": "success",
