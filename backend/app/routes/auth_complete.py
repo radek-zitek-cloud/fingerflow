@@ -12,7 +12,7 @@ import time
 from datetime import timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from pydantic import BaseModel, EmailStr
@@ -536,3 +536,190 @@ async def list_sessions(
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information from JWT token."""
     return current_user
+
+
+# ============================================================================
+# Google OAuth2 Authentication
+# ============================================================================
+
+@router.get("/google/login")
+async def google_login():
+    """
+    Initiate Google OAuth2 login flow.
+
+    Returns authorization URL that frontend should redirect to.
+    """
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env"
+        )
+
+    from urllib.parse import urlencode
+
+    # Google OAuth2 authorization URL
+    auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+
+    # OAuth2 parameters
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+
+    authorization_url = f"{auth_url}?{urlencode(params)}"
+
+    logger.info("google_oauth_initiated")
+
+    return {
+        "authorization_url": authorization_url
+    }
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Google OAuth2 callback.
+
+    Exchanges authorization code for tokens, retrieves user info,
+    creates or updates user, and returns JWT tokens.
+    """
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Google OAuth is not configured"
+        )
+
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        import requests
+
+        # Exchange code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "code": code,
+            "client_id": settings.google_client_id,
+            "client_secret": settings.google_client_secret,
+            "redirect_uri": settings.google_redirect_uri,
+            "grant_type": "authorization_code",
+        }
+
+        token_response = requests.post(token_url, data=token_data)
+
+        if token_response.status_code != 200:
+            logger.error(
+                "google_token_exchange_failed",
+                status_code=token_response.status_code,
+                error=token_response.text
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to exchange authorization code for tokens"
+            )
+
+        tokens = token_response.json()
+        id_token_jwt = tokens.get("id_token")
+
+        # Verify and decode ID token
+        try:
+            user_info = id_token.verify_oauth2_token(
+                id_token_jwt,
+                google_requests.Request(),
+                settings.google_client_id
+            )
+        except Exception as e:
+            logger.error("google_token_verification_failed", error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to verify Google ID token"
+            )
+
+        # Extract user information
+        google_id = user_info.get("sub")
+        email = user_info.get("email")
+        email_verified = user_info.get("email_verified", False)
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email not provided by Google"
+            )
+
+        # Find or create user
+        result = db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
+        if user:
+            # Existing user - update if needed
+            if user.auth_provider != "google":
+                logger.warning(
+                    "google_oauth_existing_local_user",
+                    email=email,
+                    existing_provider=user.auth_provider
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"An account with this email already exists using {user.auth_provider} authentication"
+                )
+
+            # Update email verification status
+            if email_verified and not user.email_verified:
+                user.email_verified = True
+                user.email_verified_at = int(time.time() * 1000)
+
+            logger.info("google_oauth_existing_user", user_id=user.id, email=email)
+        else:
+            # Create new user
+            user = User(
+                email=email,
+                auth_provider="google",
+                created_at=int(time.time() * 1000),
+                email_verified=email_verified,
+                email_verified_at=int(time.time() * 1000) if email_verified else None,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            logger.info("google_oauth_new_user", user_id=user.id, email=email)
+
+        # Create JWT tokens
+        access_token = create_access_token(
+            data={"user_id": user.id, "email": user.email}
+        )
+
+        # Create refresh token
+        refresh_token = RefreshToken(
+            user_id=user.id,
+            token=RefreshToken.generate_token(),
+            created_at=int(time.time() * 1000),
+            expires_at=int(time.time() * 1000) + (settings.refresh_token_expire_days * 24 * 60 * 60 * 1000),
+            device_info=request.headers.get("user-agent", "Unknown")[:255],
+        )
+        db.add(refresh_token)
+        db.commit()
+
+        # Redirect to frontend with tokens in URL hash (more secure than query params)
+        # Hash fragments are not sent to server, only accessible client-side
+        frontend_url = f"{settings.frontend_url}/#access_token={access_token}&refresh_token={refresh_token.token}&token_type=bearer"
+
+        logger.info("google_oauth_success", user_id=user.id, redirecting_to=settings.frontend_url)
+
+        return RedirectResponse(url=frontend_url, status_code=302)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("google_oauth_callback_error", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth authentication failed"
+        )

@@ -151,6 +151,10 @@ export const authAPI = {
     return fetchWithAuth('/auth/sessions');
   },
 
+  async googleLogin() {
+    return fetchWithAuth('/auth/google/login');
+  },
+
   logout() {
     clearAuthToken();
     localStorage.removeItem('refresh_token');

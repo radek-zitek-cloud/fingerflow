@@ -25,7 +25,7 @@ const SAMPLE_TEXT =
   'Focus on accuracy first, then gradually increase your speed.';
 
 function App() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, checkAuth } = useAuth();
   const [currentPage, setCurrentPage] = useState('home'); // 'home', 'auth', 'profile'
   const [theme, setTheme] = useState('default');
   const [viewMode, setViewMode] = useState('ticker'); // 'ticker' or 'rolling'
@@ -35,9 +35,51 @@ function App() {
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [lastKeyCode, setLastKeyCode] = useState(null);
   const [startTime, setStartTime] = useState(null);
+  const [googleCallbackStatus, setGoogleCallbackStatus] = useState(null); // 'processing', 'success', 'error'
 
   // Initialize telemetry
   const { addEvent } = useTelemetry(sessionId, sessionStartTime);
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    // Check for tokens in URL hash (from Google OAuth redirect)
+    const hash = window.location.hash.substring(1); // Remove the #
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const error = params.get('error');
+
+    if (error) {
+      setGoogleCallbackStatus('error');
+      console.error('Google OAuth error:', error);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (accessToken && refreshToken) {
+      setGoogleCallbackStatus('processing');
+      handleGoogleCallback(accessToken, refreshToken);
+    }
+  }, []);
+
+  async function handleGoogleCallback(accessToken, refreshToken) {
+    try {
+      // Store tokens
+      localStorage.setItem('auth_token', accessToken);
+      localStorage.setItem('refresh_token', refreshToken);
+
+      setGoogleCallbackStatus('success');
+
+      // Clean URL and reload auth state
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await checkAuth();
+    } catch (err) {
+      console.error('Google callback error:', err);
+      setGoogleCallbackStatus('error');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
 
   // Apply theme
   useEffect(() => {
@@ -131,12 +173,14 @@ function App() {
   const isComplete = currentIndex >= SAMPLE_TEXT.length;
   const stats = calculateStats();
 
-  if (loading) {
+  if (loading || googleCallbackStatus === 'processing') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-app)]">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p style={{ color: 'var(--text-dim)' }}>Loading...</p>
+          <p style={{ color: 'var(--text-dim)' }}>
+            {googleCallbackStatus === 'processing' ? 'Completing Google Sign In...' : 'Loading...'}
+          </p>
         </div>
       </div>
     );

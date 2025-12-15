@@ -49,7 +49,7 @@ export function useForm(initialValues = {}, validators = {}) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (onSubmit) => {
+  const handleSubmit = (onSubmit) => {
     return async (e) => {
       e.preventDefault();
       setIsSubmitting(true);
