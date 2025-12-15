@@ -25,8 +25,10 @@ export function AuthProvider({ children }) {
       const userData = await authAPI.getCurrentUser();
       setUser(userData);
     } catch (err) {
+      console.error('checkAuth failed:', err);
       // Not authenticated or token expired
       setUser(null);
+      clearAuthToken();
     } finally {
       setLoading(false);
     }
@@ -46,6 +48,7 @@ export function AuthProvider({ children }) {
 
   async function register(email, password) {
     try {
+      clearAuthToken();
       setError(null);
       const response = await authAPI.register(email, password);
       await checkAuth(); // Fetch user data after registration

@@ -27,7 +27,7 @@ class TestForgotPassword:
         assert response.json()["status"] == "success"
 
         # Verify token was created
-        result = await db_session.execute(
+        result = db_session.execute(
             select(PasswordResetToken).where(
                 PasswordResetToken.user_id == test_user.id
             )
@@ -59,7 +59,7 @@ class TestForgotPassword:
             created_at=1000000000000,
         )
         db_session.add(oauth_user)
-        await db_session.commit()
+        db_session.commit()
 
         response = await client.post(
             "/api/users/forgot-password",
@@ -70,7 +70,7 @@ class TestForgotPassword:
         assert response.status_code == 200
 
         # But no token should be created
-        result = await db_session.execute(
+        result = db_session.execute(
             select(PasswordResetToken).where(
                 PasswordResetToken.user_id == oauth_user.id
             )
@@ -89,7 +89,7 @@ class TestForgotPassword:
             json={"email": test_user.email},
         )
 
-        result = await db_session.execute(
+        result = db_session.execute(
             select(PasswordResetToken).where(
                 PasswordResetToken.user_id == test_user.id
             )
@@ -102,10 +102,11 @@ class TestForgotPassword:
             json={"email": test_user.email},
         )
 
-        # First token should no longer exist (deleted)
-        result = await db_session.execute(
+        # First token should no longer exist (deleted / invalidated).
+        # SQLite may reuse integer primary keys when a table is emptied, so assert on the token value.
+        result = db_session.execute(
             select(PasswordResetToken).where(
-                PasswordResetToken.id == first_token.id
+                PasswordResetToken.token == first_token.token
             )
         )
         assert result.scalar_one_or_none() is None
@@ -125,7 +126,7 @@ class TestResetPassword:
             expires_at=9999999999000,  # Far future
         )
         db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         new_password = "NewTestPass456"
 
@@ -139,11 +140,11 @@ class TestResetPassword:
         assert response.json()["status"] == "success"
 
         # Verify password was changed
-        await db_session.refresh(test_user)
+        db_session.refresh(test_user)
         assert verify_password(new_password, test_user.hashed_password)
 
         # Verify token is marked as used
-        await db_session.refresh(token)
+        db_session.refresh(token)
         assert token.used is True
 
     @pytest.mark.asyncio
@@ -168,7 +169,7 @@ class TestResetPassword:
             expires_at=1000000001000,  # Already expired
         )
         db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         response = await client.post(
             "/api/users/reset-password",
@@ -190,7 +191,7 @@ class TestResetPassword:
             used=True,  # Already used
         )
         db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         response = await client.post(
             "/api/users/reset-password",
@@ -209,7 +210,7 @@ class TestResetPassword:
             created_at=1000000000000,
         )
         db_session.add(oauth_user)
-        await db_session.commit()
+        db_session.commit()
 
         # Create reset token
         token = PasswordResetToken(
@@ -219,7 +220,7 @@ class TestResetPassword:
             expires_at=9999999999000,
         )
         db_session.add(token)
-        await db_session.commit()
+        db_session.commit()
 
         response = await client.post(
             "/api/users/reset-password",
@@ -253,7 +254,7 @@ class TestPasswordChange:
         assert response.json()["status"] == "success"
 
         # Verify password was changed
-        await db_session.refresh(test_user)
+        db_session.refresh(test_user)
         assert verify_password(new_password, test_user.hashed_password)
 
     @pytest.mark.asyncio
@@ -285,8 +286,8 @@ class TestPasswordChange:
             created_at=1000000000000,
         )
         db_session.add(oauth_user)
-        await db_session.commit()
-        await db_session.refresh(oauth_user)
+        db_session.commit()
+        db_session.refresh(oauth_user)
 
         oauth_token = create_access_token(
             data={"user_id": oauth_user.id, "email": oauth_user.email}

@@ -9,7 +9,7 @@ Provides endpoints for:
 - Checking 2FA status
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -56,7 +56,7 @@ class TwoFactorStatus(BaseModel):
 @router.post("/setup", response_model=TwoFactorSetupResponse)
 async def setup_2fa(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Generate 2FA secret and QR code for setup.
@@ -84,7 +84,7 @@ async def setup_2fa(
     current_user.two_factor_secret = secret
     current_user.two_factor_backup_codes = hash_backup_codes(backup_codes)
 
-    await db.commit()
+    db.commit()
 
     logger.info("2fa_setup_initiated", user_id=current_user.id)
 
@@ -99,7 +99,7 @@ async def setup_2fa(
 async def verify_2fa_setup(
     verify_data: TwoFactorVerifySetup,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Verify 2FA code and enable 2FA.
@@ -130,7 +130,7 @@ async def verify_2fa_setup(
 
     # Enable 2FA
     current_user.two_factor_enabled = True
-    await db.commit()
+    db.commit()
 
     logger.info("2fa_enabled", user_id=current_user.id)
 
@@ -144,7 +144,7 @@ async def verify_2fa_setup(
 async def disable_2fa(
     disable_data: TwoFactorDisable,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Disable 2FA for the current user.
@@ -199,7 +199,7 @@ async def disable_2fa(
     current_user.two_factor_secret = None
     current_user.two_factor_backup_codes = None
 
-    await db.commit()
+    db.commit()
 
     logger.info("2fa_disabled", user_id=current_user.id)
 
@@ -213,7 +213,7 @@ async def disable_2fa(
 async def regenerate_backup_codes(
     verify_data: TwoFactorVerifySetup,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """
     Regenerate backup codes for 2FA.
@@ -240,7 +240,7 @@ async def regenerate_backup_codes(
     new_backup_codes = generate_backup_codes()
     current_user.two_factor_backup_codes = hash_backup_codes(new_backup_codes)
 
-    await db.commit()
+    db.commit()
 
     logger.info("2fa_backup_codes_regenerated", user_id=current_user.id)
 

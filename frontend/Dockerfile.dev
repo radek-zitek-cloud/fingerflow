@@ -1,0 +1,18 @@
+# Development Dockerfile for FingerFlow Frontend
+# Includes dev server with hot reloading
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev)
+RUN npm install
+
+# Expose Vite dev server port
+EXPOSE 5173
+
+# Run dev server
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

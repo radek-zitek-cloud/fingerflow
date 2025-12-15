@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, Settings, Menu, X } from 'lucide-react';
+import { User, LogOut, Settings, Menu, X, BookOpen } from 'lucide-react';
 
 export function Navbar({ onNavigate, theme, onThemeChange }) {
   const { user, isAuthenticated, logout } = useAuth();
@@ -33,7 +33,7 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
   };
 
   return (
-    <nav className="bg-[var(--bg-panel)] border-b" style={{ borderColor: 'var(--key-border)' }}>
+    <nav className="glass-nav sticky top-0 z-50 border-b" style={{ borderColor: 'var(--key-border)' }}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -41,9 +41,7 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
             onClick={() => onNavigate('home')}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
-            <div className="text-2xl font-bold" style={{ color: 'var(--accent-primary)' }}>
-              FingerFlow
-            </div>
+            <img src="/fingerflow-64.png" alt="FingerFlow Logo" className="h-8" />
           </button>
 
           {/* Desktop Navigation */}
@@ -52,13 +50,14 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
             <select
               value={theme}
               onChange={(e) => onThemeChange(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border bg-[var(--bg-input)] text-sm"
+              className="px-3 py-1.5 rounded-lg border bg-[var(--bg-input)] text-sm focus:ring-2 focus:ring-[var(--accent-primary)] focus:outline-none"
               style={{
                 borderColor: 'var(--key-border)',
                 color: 'var(--text-main)',
               }}
             >
-              <option value="default">Dark</option>
+              <option value="default">Modern Slate</option>
+              <option value="cyberpunk">Cyberpunk</option>
               <option value="paper">Paper</option>
               <option value="high-contrast">High Contrast</option>
             </select>
@@ -85,6 +84,17 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
                       borderColor: 'var(--key-border)',
                     }}
                   >
+                    <button
+                      onClick={() => {
+                        onNavigate('word-sets');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-[var(--bg-input)] transition-colors"
+                      style={{ color: 'var(--text-main)' }}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      Manage Word Sets
+                    </button>
                     <button
                       onClick={() => {
                         onNavigate('profile');
@@ -147,8 +157,9 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
                   color: 'var(--text-main)',
                 }}
               >
-                <option value="default">Dark Theme</option>
-                <option value="paper">Paper Theme</option>
+                <option value="default">Modern Slate</option>
+                <option value="cyberpunk">Cyberpunk</option>
+                <option value="paper">Paper</option>
                 <option value="high-contrast">High Contrast</option>
               </select>
 
@@ -160,6 +171,17 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
                       {user?.email}
                     </p>
                   </div>
+                  <button
+                    onClick={() => {
+                      onNavigate('word-sets');
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full px-3 py-2 text-left flex items-center gap-2 rounded-lg hover:bg-[var(--bg-input)]"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Manage Word Sets
+                  </button>
                   <button
                     onClick={() => {
                       onNavigate('profile');
