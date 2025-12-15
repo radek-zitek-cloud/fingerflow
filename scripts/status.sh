@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 
 # Check if containers are running
 echo -e "${BLUE}Container Status:${NC}"
-docker-compose ps
+docker compose ps
 
 echo ""
 echo -e "${BLUE}Health Checks:${NC}"

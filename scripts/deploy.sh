@@ -46,7 +46,7 @@ fi
 echo -e "${GREEN}✓ Docker installed${NC}"
 
 # Check Docker Compose
-if ! command -v docker-compose &> /dev/null; then
+if ! docker compose version &> /dev/null 2>&1; then
     echo -e "${RED}✗ Docker Compose is not installed${NC}"
     exit 1
 fi
@@ -94,12 +94,12 @@ echo -e "${BLUE}Step 2: Building Docker images...${NC}"
 # Step 3: Stop existing containers
 echo ""
 echo -e "${BLUE}Step 3: Stopping existing containers...${NC}"
-docker-compose down
+docker compose down
 
 # Step 4: Start new containers
 echo ""
 echo -e "${BLUE}Step 4: Starting containers...${NC}"
-docker-compose up -d
+docker compose up -d
 
 # Step 5: Health checks
 echo ""

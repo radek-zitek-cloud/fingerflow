@@ -31,12 +31,12 @@ echo ""
 
 # Stop containers
 if [ "$REMOVE_VOLUMES" = true ]; then
-    docker-compose down -v
+    docker compose down -v
     echo ""
     echo -e "${GREEN}✓ Services stopped and volumes removed!${NC}"
     echo -e "${RED}⚠ All data has been deleted!${NC}"
 else
-    docker-compose down
+    docker compose down
     echo ""
     echo -e "${GREEN}✓ Services stopped!${NC}"
     echo -e "${BLUE}Data volumes preserved${NC}"

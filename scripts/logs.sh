@@ -30,11 +30,11 @@ for arg in "$@"; do
     esac
 done
 
-# Build docker-compose command
+# Build docker compose command
 if [ "$FOLLOW" = true ]; then
-    LOGS_CMD="docker-compose logs -f"
+    LOGS_CMD="docker compose logs -f"
 else
-    LOGS_CMD="docker-compose logs"
+    LOGS_CMD="docker compose logs"
 fi
 
 # Add service if specified

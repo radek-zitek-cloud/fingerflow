@@ -40,7 +40,7 @@ echo ""
 
 # Stop all FingerFlow containers
 echo -e "${BLUE}Stopping containers...${NC}"
-docker-compose down
+docker compose down
 
 # Remove old FingerFlow images (keep latest)
 echo -e "${BLUE}Removing old images...${NC}"

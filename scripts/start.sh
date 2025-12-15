@@ -38,18 +38,18 @@ if [ "$DEV_MODE" = true ]; then
     echo ""
 
     if [ "$DETACHED" = true ]; then
-        docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+        docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
     else
-        docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+        docker compose -f docker-compose.yml -f docker-compose.dev.yml up
     fi
 else
     echo -e "${YELLOW}Starting in PRODUCTION mode...${NC}"
     echo ""
 
     if [ "$DETACHED" = true ]; then
-        docker-compose up -d
+        docker compose up -d
     else
-        docker-compose up
+        docker compose up
     fi
 fi
 

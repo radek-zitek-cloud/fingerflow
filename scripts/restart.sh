@@ -44,7 +44,7 @@ echo ""
 
 # Stop services
 echo -e "${BLUE}Stopping services...${NC}"
-docker-compose $COMPOSE_FILES down
+docker compose $COMPOSE_FILES down
 
 # Rebuild if requested
 if [ "$REBUILD" = true ]; then
@@ -60,7 +60,7 @@ fi
 # Start services
 echo ""
 echo -e "${BLUE}Starting services...${NC}"
-docker-compose $COMPOSE_FILES up -d
+docker compose $COMPOSE_FILES up -d
 
 echo ""
 echo -e "${GREEN}✓ Services restarted successfully!${NC}"
