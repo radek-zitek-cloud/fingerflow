@@ -424,6 +424,13 @@ function App() {
       if (currentIndex >= practiceText.length) return;
       if (sessionMode === 'timed' && timeRemaining !== null && timeRemaining <= 0) return;
 
+      // Handle Escape key to abort session
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        abortSession();
+        return;
+      }
+
       // Don't capture browser shortcuts or modifier-only keys
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -548,7 +555,29 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [startTime, currentIndex, practiceText, firstKeystrokeTime, sessionId, addEvent, characterStates, sessionMode, timeRemaining]);
+  }, [startTime, currentIndex, practiceText, firstKeystrokeTime, sessionId, addEvent, characterStates, sessionMode, timeRemaining, abortSession]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Enter key: Start session when on homepage
+      if (e.key === 'Enter' && !startTime && currentPage === 'home') {
+        e.preventDefault();
+        startSession();
+      }
+
+      // Esc key: Abort session when typing
+      if (e.key === 'Escape' && startTime) {
+        e.preventDefault();
+        abortSession();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [startTime, currentPage, startSession, abortSession]);
 
   // Check if test is complete
   // Check if session is complete (either all text typed or time ran out)

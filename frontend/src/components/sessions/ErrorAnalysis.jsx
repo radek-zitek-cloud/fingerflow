@@ -1,12 +1,12 @@
 /**
  * Error Analysis Component
  *
- * Displays error count analysis:
- * - Total errors per finger
- * - Total errors per key
- * - Visual representation of both hands with color-coded error counts
- * - Keyboard layout with per-key error counts
- * - Helps identify problematic fingers and keys that cause most errors
+ * Displays error rate analysis (normalized by keystrokes):
+ * - Error rate (%) per finger with absolute count in brackets
+ * - Error rate (%) per key with absolute count in brackets
+ * - Visual representation of both hands with color-coded error rates
+ * - Keyboard layout with per-key error rates
+ * - Helps identify problematic fingers and keys (normalized by usage)
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -111,27 +111,27 @@ export function ErrorAnalysis({ sessionId }) {
           Color Coding Guide (Calibrated to Your Session)
         </h3>
         <div className="text-sm">
-          <p className="font-semibold mb-2" style={{ color: 'var(--text-dim)' }}>Error Count</p>
+          <p className="font-semibold mb-2" style={{ color: 'var(--text-dim)' }}>Error Rate (% of keystrokes)</p>
           <div className="grid grid-cols-5 gap-2">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: '#10b981' }}></div>
-              <span style={{ color: 'var(--text-dim)' }}>Fewest (0-{thresholds[0]})</span>
+              <span style={{ color: 'var(--text-dim)' }}>Lowest (0-{thresholds[0].toFixed(1)}%)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: '#eab308' }}></div>
-              <span style={{ color: 'var(--text-dim)' }}>Few ({thresholds[0]}-{thresholds[1]})</span>
+              <span style={{ color: 'var(--text-dim)' }}>Low ({thresholds[0].toFixed(1)}-{thresholds[1].toFixed(1)}%)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: '#f59e0b' }}></div>
-              <span style={{ color: 'var(--text-dim)' }}>Some ({thresholds[1]}-{thresholds[2]})</span>
+              <span style={{ color: 'var(--text-dim)' }}>Medium ({thresholds[1].toFixed(1)}-{thresholds[2].toFixed(1)}%)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ef4444' }}></div>
-              <span style={{ color: 'var(--text-dim)' }}>Many ({thresholds[2]}-{thresholds[3]})</span>
+              <span style={{ color: 'var(--text-dim)' }}>High ({thresholds[2].toFixed(1)}-{thresholds[3].toFixed(1)}%)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: '#9333ea' }}></div>
-              <span style={{ color: 'var(--text-dim)' }}>Most (&gt;{thresholds[3]})</span>
+              <span style={{ color: 'var(--text-dim)' }}>Highest (&gt;{thresholds[3].toFixed(1)}%)</span>
             </div>
           </div>
         </div>
@@ -187,12 +187,12 @@ function FingerView({ fingerMetrics, thresholds, totalErrors }) {
           </h3>
           <div className="flex justify-center items-end gap-3" style={{ height: '300px' }}>
             {leftHand.map(({ finger, label, row }) => {
-              const count = fingerMetrics[finger] || 0;
+              const metric = fingerMetrics[finger] || { errorRate: 0, errorCount: 0, totalKeystrokes: 0 };
               return (
                 <FingerColumn
                   key={finger}
                   label={label}
-                  errorCount={count}
+                  metric={metric}
                   row={row}
                   thresholds={thresholds}
                 />
@@ -208,12 +208,12 @@ function FingerView({ fingerMetrics, thresholds, totalErrors }) {
           </h3>
           <div className="flex justify-center items-end gap-3" style={{ height: '300px' }}>
             {rightHand.map(({ finger, label, row }) => {
-              const count = fingerMetrics[finger] || 0;
+              const metric = fingerMetrics[finger] || { errorRate: 0, errorCount: 0, totalKeystrokes: 0 };
               return (
                 <FingerColumn
                   key={finger}
                   label={label}
-                  errorCount={count}
+                  metric={metric}
                   row={row}
                   thresholds={thresholds}
                 />
@@ -233,20 +233,21 @@ function FingerView({ fingerMetrics, thresholds, totalErrors }) {
             <thead>
               <tr className="border-b" style={{ borderColor: 'var(--key-border)' }}>
                 <th className="text-left py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-dim)' }}>Finger</th>
-                <th className="text-right py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-dim)' }}>Errors</th>
-                <th className="text-right py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-dim)' }}>% of Total</th>
+                <th className="text-right py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-dim)' }}>Error Rate</th>
+                <th className="text-right py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-dim)' }}>Keystrokes</th>
               </tr>
             </thead>
             <tbody>
               {[...leftHand, ...rightHand].map(({ finger, label }) => {
-                const count = fingerMetrics[finger] || 0;
-                const percentage = totalErrors > 0 ? (count / totalErrors * 100) : 0;
+                const metric = fingerMetrics[finger] || { errorRate: 0, errorCount: 0, totalKeystrokes: 0 };
 
                 return (
                   <tr key={finger} className="border-b" style={{ borderColor: 'var(--key-border)' }}>
                     <td className="py-3 px-4" style={{ color: 'var(--text-main)' }}>{label} ({finger.split('_')[0]})</td>
-                    <td className="text-right py-3 px-4 font-semibold" style={{ color: getErrorColor(count, thresholds) }}>{count}</td>
-                    <td className="text-right py-3 px-4" style={{ color: 'var(--text-dim)' }}>{percentage.toFixed(1)}%</td>
+                    <td className="text-right py-3 px-4 font-semibold" style={{ color: getErrorColor(metric.errorRate, thresholds) }}>
+                      {metric.errorRate.toFixed(1)}% ({metric.errorCount})
+                    </td>
+                    <td className="text-right py-3 px-4" style={{ color: 'var(--text-dim)' }}>{metric.totalKeystrokes}</td>
                   </tr>
                 );
               })}
@@ -259,16 +260,16 @@ function FingerView({ fingerMetrics, thresholds, totalErrors }) {
 }
 
 // Finger column visualization
-function FingerColumn({ label, errorCount, row, thresholds }) {
-  const color = getErrorColor(errorCount, thresholds);
+function FingerColumn({ label, metric, row, thresholds }) {
+  const color = getErrorColor(metric.errorRate, thresholds);
 
-  // Height based on error count (higher errors = taller bar, which is BAD)
+  // Height based on error rate (higher error rate = taller bar, which is BAD)
   const maxHeight = 200;
   const minHeight = 50;
-  const maxErrors = thresholds[3] * 1.5; // Use 1.5x the fourth threshold as max
-  const normalizedHeight = errorCount === 0
+  const maxErrorRate = thresholds[3] * 1.5; // Use 1.5x the fourth threshold as max
+  const normalizedHeight = metric.errorRate === 0
     ? minHeight
-    : Math.min(maxHeight, minHeight + (errorCount / maxErrors) * (maxHeight - minHeight));
+    : Math.min(maxHeight, minHeight + (metric.errorRate / maxErrorRate) * (maxHeight - minHeight));
 
   return (
     <div className="flex flex-col items-center" style={{ marginBottom: `${row * 30}px` }}>
@@ -279,11 +280,13 @@ function FingerColumn({ label, errorCount, row, thresholds }) {
           backgroundColor: color,
           border: `2px solid ${color}`,
         }}
-        title={`${label}: ${errorCount} errors`}
+        title={`${label}: ${metric.errorRate.toFixed(1)}% error rate (${metric.errorCount} errors in ${metric.totalKeystrokes} keystrokes)`}
       />
       <p className="text-xs mt-2 font-semibold" style={{ color: 'var(--text-main)' }}>{label}</p>
-      <p className="text-xs font-bold" style={{ color: color }}>{errorCount}</p>
-      {errorCount === 0 && (
+      <p className="text-xs font-bold" style={{ color: color }}>
+        {metric.errorRate.toFixed(1)}%<br/>({metric.errorCount})
+      </p>
+      {metric.errorCount === 0 && (
         <CheckCircle className="w-3 h-3 mt-1" style={{ color: '#10b981' }} />
       )}
     </div>
@@ -418,15 +421,14 @@ function KeyboardView({ keyMetrics, thresholds, totalErrors }) {
           <div key={rowIndex} className="flex gap-2">
             {row.map((key) => {
               const keyCode = key.code;
-              const count = keyMetrics[keyCode] || 0;
+              const metric = keyMetrics[keyCode] || { errorRate: 0, errorCount: 0, totalKeystrokes: 0 };
               const label = keyLabels[keyCode] || keyCode.replace('Key', '');
 
               return (
                 <KeyButton
                   key={keyCode}
-                  keyCode={keyCode}
                   label={label}
-                  errorCount={count}
+                  metric={metric}
                   width={key.width}
                   thresholds={thresholds}
                 />
@@ -436,21 +438,21 @@ function KeyboardView({ keyMetrics, thresholds, totalErrors }) {
         ))}
       </div>
 
-      {/* Top/Bottom Keys by Errors */}
+      {/* Top/Bottom Keys by Error Rate */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
         <div>
           <h4 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--status-correct)' }}>
             <CheckCircle className="w-4 h-4" />
-            Keys with Fewest Errors
+            Keys with Lowest Error Rate
           </h4>
           <div className="space-y-2">
-            {getKeysWithFewestErrors(keyMetrics, 5).map(([keyCode, count]) => (
+            {getKeysWithFewestErrors(keyMetrics, 5).map(([keyCode, metric]) => (
               <div key={keyCode} className="flex justify-between items-center text-sm">
                 <span style={{ color: 'var(--text-main)' }}>
                   {keyLabels[keyCode] || keyCode.replace('Key', '')}
                 </span>
-                <span style={{ color: getErrorColor(count, thresholds) }} className="font-semibold">
-                  {count} {count === 1 ? 'error' : 'errors'}
+                <span style={{ color: getErrorColor(metric.errorRate, thresholds) }} className="font-semibold">
+                  {metric.errorRate.toFixed(1)}% ({metric.errorCount})
                 </span>
               </div>
             ))}
@@ -459,16 +461,16 @@ function KeyboardView({ keyMetrics, thresholds, totalErrors }) {
         <div>
           <h4 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--status-error)' }}>
             <AlertTriangle className="w-4 h-4" />
-            Keys with Most Errors
+            Keys with Highest Error Rate
           </h4>
           <div className="space-y-2">
-            {getKeysWithMostErrors(keyMetrics, 5).map(([keyCode, count]) => (
+            {getKeysWithMostErrors(keyMetrics, 5).map(([keyCode, metric]) => (
               <div key={keyCode} className="flex justify-between items-center text-sm">
                 <span style={{ color: 'var(--text-main)' }}>
                   {keyLabels[keyCode] || keyCode.replace('Key', '')}
                 </span>
-                <span style={{ color: getErrorColor(count, thresholds) }} className="font-semibold">
-                  {count} {count === 1 ? 'error' : 'errors'}
+                <span style={{ color: getErrorColor(metric.errorRate, thresholds) }} className="font-semibold">
+                  {metric.errorRate.toFixed(1)}% ({metric.errorCount})
                 </span>
               </div>
             ))}
@@ -480,8 +482,8 @@ function KeyboardView({ keyMetrics, thresholds, totalErrors }) {
 }
 
 // Key button visualization
-function KeyButton({ label, errorCount, width = 1, thresholds }) {
-  const color = getErrorColor(errorCount, thresholds);
+function KeyButton({ label, metric, width = 1, thresholds }) {
+  const color = getErrorColor(metric.errorRate, thresholds);
 
   // Base unit is 50px, multiply by width factor
   // Add gap contribution for multi-unit keys
@@ -491,7 +493,7 @@ function KeyButton({ label, errorCount, width = 1, thresholds }) {
   const keyHeight = '50px';
 
   // Adjust font size for smaller keys
-  const fontSize = width < 1.5 ? '0.65rem' : '0.75rem';
+  const fontSize = width < 1.5 ? '0.55rem' : '0.65rem';
 
   return (
     <div
@@ -501,91 +503,131 @@ function KeyButton({ label, errorCount, width = 1, thresholds }) {
         height: keyHeight,
         backgroundColor: color,
         border: `2px solid ${color}`,
-        opacity: errorCount > 0 ? 1 : 0.3,
+        opacity: metric.errorCount > 0 ? 1 : 0.3,
         fontSize: fontSize,
       }}
-      title={`${label}: ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`}
+      title={`${label}: ${metric.errorRate.toFixed(1)}% error rate (${metric.errorCount} errors in ${metric.totalKeystrokes} keystrokes)`}
     >
       <span className="font-semibold text-white">{label}</span>
-      <span className="text-white opacity-90">{errorCount}</span>
+      <span className="text-white opacity-90">
+        {metric.errorRate > 0 ? `${metric.errorRate.toFixed(1)}%` : '0%'}
+      </span>
+      {metric.errorCount > 0 && (
+        <span className="text-white opacity-75 text-xs">({metric.errorCount})</span>
+      )}
     </div>
   );
 }
 
 // Algorithm: Calculate error metrics from detailed telemetry
+// Returns error rate (%) and absolute count for normalization
 function calculateErrorMetrics(events) {
   const errorsByFinger = {}; // Map of finger -> error count
   const errorsByKey = {}; // Map of key_code -> error count
+  const totalByFinger = {}; // Map of finger -> total keystrokes
+  const totalByKey = {}; // Map of key_code -> total keystrokes
   let totalErrors = 0;
+  let totalKeystrokes = 0;
 
-  // Count errors per finger and per key
+  // Count errors and totals per finger and per key
   for (const event of events) {
-    if (event.event_type === 'DOWN' && event.is_error) {
-      totalErrors++;
+    if (event.event_type === 'DOWN') {
+      totalKeystrokes++;
 
-      // Count by finger
       const finger = event.finger_used;
-      errorsByFinger[finger] = (errorsByFinger[finger] || 0) + 1;
-
-      // Count by key
       const keyCode = event.key_code;
-      errorsByKey[keyCode] = (errorsByKey[keyCode] || 0) + 1;
+
+      // Count total keystrokes
+      totalByFinger[finger] = (totalByFinger[finger] || 0) + 1;
+      totalByKey[keyCode] = (totalByKey[keyCode] || 0) + 1;
+
+      // Count errors
+      if (event.is_error) {
+        totalErrors++;
+        errorsByFinger[finger] = (errorsByFinger[finger] || 0) + 1;
+        errorsByKey[keyCode] = (errorsByKey[keyCode] || 0) + 1;
+      }
     }
   }
 
+  // Calculate error rates (percentage) for fingers
+  const fingerMetrics = {};
+  for (const finger in totalByFinger) {
+    const errors = errorsByFinger[finger] || 0;
+    const total = totalByFinger[finger];
+    fingerMetrics[finger] = {
+      errorRate: (errors / total) * 100,
+      errorCount: errors,
+      totalKeystrokes: total,
+    };
+  }
+
+  // Calculate error rates (percentage) for keys
+  const keyMetrics = {};
+  for (const keyCode in totalByKey) {
+    const errors = errorsByKey[keyCode] || 0;
+    const total = totalByKey[keyCode];
+    keyMetrics[keyCode] = {
+      errorRate: (errors / total) * 100,
+      errorCount: errors,
+      totalKeystrokes: total,
+    };
+  }
+
   return {
-    perFinger: errorsByFinger,
-    perKey: errorsByKey,
+    perFinger: fingerMetrics,
+    perKey: keyMetrics,
     totalErrors: totalErrors,
+    totalKeystrokes: totalKeystrokes,
   };
 }
 
-// Calculate dynamic thresholds based on error counts
+// Calculate dynamic thresholds based on error rates (percentages)
 function calculateThresholds(metrics) {
-  // Collect all error counts
-  const allCounts = [
-    ...Object.values(metrics.perFinger),
-    ...Object.values(metrics.perKey),
+  // Collect all error rates
+  const allRates = [
+    ...Object.values(metrics.perFinger).map(m => m.errorRate),
+    ...Object.values(metrics.perKey).map(m => m.errorRate),
   ];
 
-  if (allCounts.length === 0) {
+  if (allRates.length === 0) {
     return [0, 0, 0, 0];
   }
 
-  // Calculate quintiles (5 equal portions)
-  const min = Math.min(...allCounts);
-  const max = Math.max(...allCounts);
+  // Calculate quintiles (5 equal portions) based on error rates
+  const min = Math.min(...allRates);
+  const max = Math.max(...allRates);
   const range = max - min;
   const step = range / 5;
 
   return [
-    Math.ceil(min + step * 1),
-    Math.ceil(min + step * 2),
-    Math.ceil(min + step * 3),
-    Math.ceil(min + step * 4),
+    min + step * 1,
+    min + step * 2,
+    min + step * 3,
+    min + step * 4,
   ];
 }
 
-// Get color based on error count with dynamic thresholds
-function getErrorColor(errorCount, thresholds) {
-  if (errorCount === 0) return '#10b981'; // Green - no errors
-  if (errorCount <= thresholds[0]) return '#10b981'; // Green - fewest
-  if (errorCount <= thresholds[1]) return '#eab308'; // Yellow - few
-  if (errorCount <= thresholds[2]) return '#f59e0b'; // Orange - some
-  if (errorCount <= thresholds[3]) return '#ef4444'; // Red - many
-  return '#9333ea'; // Purple - most
+// Get color based on error rate (percentage) with dynamic thresholds
+function getErrorColor(errorRate, thresholds) {
+  if (errorRate === 0) return '#10b981'; // Green - no errors
+  if (errorRate <= thresholds[0]) return '#10b981'; // Green - lowest rate
+  if (errorRate <= thresholds[1]) return '#eab308'; // Yellow - low rate
+  if (errorRate <= thresholds[2]) return '#f59e0b'; // Orange - medium rate
+  if (errorRate <= thresholds[3]) return '#ef4444'; // Red - high rate
+  return '#9333ea'; // Purple - highest rate
 }
 
-// Get keys with fewest errors
+// Get keys with lowest error rates
 function getKeysWithFewestErrors(keyMetrics, limit) {
   return Object.entries(keyMetrics)
-    .sort((a, b) => a[1] - b[1])
+    .sort((a, b) => a[1].errorRate - b[1].errorRate)
     .slice(0, limit);
 }
 
-// Get keys with most errors
+// Get keys with highest error rates
 function getKeysWithMostErrors(keyMetrics, limit) {
   return Object.entries(keyMetrics)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].errorRate - a[1].errorRate)
     .slice(0, limit);
 }
