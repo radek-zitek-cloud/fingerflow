@@ -14,6 +14,7 @@ import { TickerTape } from './components/TickerTape';
 import { RollingWindow } from './components/RollingWindow';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { SessionHistory } from './components/sessions/SessionHistory';
+import { SessionProgressChart } from './components/sessions/SessionProgressChart';
 import { useTelemetry } from './hooks/useTelemetry';
 import { sessionsAPI, wordSetsAPI } from './services/api';
 import { Activity, Target, Trophy, TrendingUp } from 'lucide-react';
@@ -147,10 +148,18 @@ function App() {
     }
   }
 
-  // Load theme from user profile when authenticated
+  // Load settings from user profile when authenticated
   useEffect(() => {
-    if (isAuthenticated && user?.theme) {
-      setTheme(user.theme);
+    if (isAuthenticated && user?.settings) {
+      const settings = user.settings;
+      // Load theme
+      if (settings.theme) setTheme(settings.theme);
+      // Load session configuration
+      if (settings.sessionMode) setSessionMode(settings.sessionMode);
+      if (settings.timedDuration) setTimedDuration(settings.timedDuration);
+      if (settings.wordCount) setWordCount(settings.wordCount);
+      if (settings.viewMode) setViewMode(settings.viewMode);
+      if (settings.selectedWordSetId) setSelectedWordSetId(settings.selectedWordSetId);
     }
   }, [isAuthenticated, user]);
 
@@ -158,30 +167,6 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
-
-  // Save theme to backend when changed (for authenticated users)
-  useEffect(() => {
-    const saveTheme = async () => {
-      if (isAuthenticated && user?.theme !== theme) {
-        try {
-          await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-            },
-            body: JSON.stringify({
-              email: user.email,
-              theme: theme
-            })
-          });
-        } catch (error) {
-          console.error('Failed to save theme:', error);
-        }
-      }
-    };
-    saveTheme();
-  }, [theme, isAuthenticated, user]);
 
   // Redirect to home if user logs in while on auth page
   useEffect(() => {
@@ -236,6 +221,31 @@ function App() {
         const session = await sessionsAPI.create(sessionStart);
         setSessionId(session.id);
         setSessionStartTime(sessionStart);
+
+        // Save current settings to user profile
+        try {
+          await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
+            body: JSON.stringify({
+              email: user.email,
+              settings: {
+                theme,
+                sessionMode,
+                timedDuration,
+                wordCount,
+                viewMode,
+                selectedWordSetId
+              }
+            })
+          });
+        } catch (error) {
+          console.error('Failed to save settings:', error);
+          // Continue without saving settings
+        }
       } catch (error) {
         console.error('Failed to create session:', error);
         // Continue without session tracking
@@ -526,6 +536,32 @@ function App() {
   );
   const stats = calculateStats();
 
+  // Handle theme changes and save to backend
+  const handleThemeChange = async (newTheme) => {
+    setTheme(newTheme);
+
+    if (isAuthenticated && user) {
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          },
+          body: JSON.stringify({
+            email: user.email,
+            settings: {
+              ...user.settings,
+              theme: newTheme
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Failed to save theme:', error);
+      }
+    }
+  };
+
   // Auto-end timed sessions when time runs out
   useEffect(() => {
     if (isComplete && sessionMode === 'timed' && timeRemaining === 0 && startTime && !isAuthenticated) {
@@ -556,7 +592,7 @@ function App() {
       <Navbar
         onNavigate={setCurrentPage}
         theme={theme}
-        onThemeChange={setTheme}
+        onThemeChange={handleThemeChange}
       />
 
       {/* Auth Page */}
@@ -835,8 +871,9 @@ function App() {
 
               {/* Session History for Authenticated Users */}
               {isAuthenticated && (
-                <div className="mt-16">
+                <div className="mt-16 space-y-16">
                   <SessionHistory />
+                  <SessionProgressChart />
                 </div>
               )}
 

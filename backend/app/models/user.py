@@ -1,8 +1,9 @@
 """User model for authentication and user management."""
 import time
-from sqlalchemy import String, BigInteger, Index, Boolean
+import json
+from sqlalchemy import String, BigInteger, Index, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.database import Base
 from app.models._types import BIGINT_PK
 
@@ -33,12 +34,19 @@ class User(Base):
         comment="Unix timestamp in milliseconds"
     )
 
-    # User preferences
-    theme: Mapped[str] = mapped_column(
-        String(50),
+    # User preferences stored in JSON
+    settings: Mapped[Dict[str, Any]] = mapped_column(
+        JSON,
         nullable=False,
-        default="default",
-        comment="UI theme preference: 'default', 'cyberpunk', 'paper', 'high-contrast'"
+        default=lambda: {
+            "theme": "default",
+            "sessionMode": "wordcount",
+            "timedDuration": 30,
+            "wordCount": 20,
+            "viewMode": "ticker",
+            "selectedWordSetId": None
+        },
+        comment="User settings JSON: theme, session config, view preferences"
     )
 
     # Email verification

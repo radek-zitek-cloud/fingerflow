@@ -1,6 +1,6 @@
 """Authentication-related Pydantic schemas."""
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
+from typing import Optional, Dict, Any
 import re
 
 
@@ -59,7 +59,16 @@ class UserResponse(BaseModel):
     email: str
     auth_provider: str
     created_at: int
-    theme: str = "default"
+    settings: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "theme": "default",
+            "sessionMode": "wordcount",
+            "timedDuration": 30,
+            "wordCount": 20,
+            "viewMode": "ticker",
+            "selectedWordSetId": None
+        }
+    )
 
     class Config:
         from_attributes = True

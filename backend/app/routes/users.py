@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from pydantic import BaseModel, EmailStr
+from typing import Dict, Any, Optional
 
 from app.database import get_db
 from app.models.user import User
@@ -19,7 +20,7 @@ logger = get_logger(__name__)
 class ProfileUpdate(BaseModel):
     """Schema for updating user profile."""
     email: EmailStr
-    theme: str | None = None
+    settings: Optional[Dict[str, Any]] = None
 
 
 class PasswordChange(BaseModel):
@@ -75,9 +76,9 @@ async def update_profile(
     # Update email
     current_user.email = profile_data.email
 
-    # Update theme if provided
-    if profile_data.theme is not None:
-        current_user.theme = profile_data.theme
+    # Update settings if provided
+    if profile_data.settings is not None:
+        current_user.settings = profile_data.settings
 
     db.commit()
     db.refresh(current_user)
@@ -86,14 +87,14 @@ async def update_profile(
         "profile_updated",
         user_id=current_user.id,
         new_email=profile_data.email,
-        theme=current_user.theme
+        settings_updated=profile_data.settings is not None
     )
 
     return {
         "status": "success",
         "message": "Profile updated successfully",
         "email": current_user.email,
-        "theme": current_user.theme,
+        "settings": current_user.settings,
     }
 
 
