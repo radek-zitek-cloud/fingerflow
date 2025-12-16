@@ -77,6 +77,16 @@ export function TickerTape({ text, currentIndex, characterStates }) {
           const state = characterStates[index] || 'pending';
           const isCurrent = index === currentIndex;
 
+          // Display underscore for space errors and corrected spaces
+          let displayChar = char;
+          if (char === ' ') {
+            if (state === 'error' || state === 'corrected') {
+              displayChar = '_';
+            } else {
+              displayChar = '\u00A0'; // Non-breaking space for correct/pending spaces
+            }
+          }
+
           return (
             <span
               key={index}
@@ -85,7 +95,7 @@ export function TickerTape({ text, currentIndex, characterStates }) {
                 ${isCurrent ? 'character-current' : ''}
               `}
             >
-              {char === ' ' ? '\u00A0' : char}
+              {displayChar}
             </span>
           );
         })}
