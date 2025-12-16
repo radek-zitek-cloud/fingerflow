@@ -14,15 +14,47 @@ import { TickerTape } from './components/TickerTape';
 import { RollingWindow } from './components/RollingWindow';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { useTelemetry } from './hooks/useTelemetry';
-import { sessionsAPI } from './services/api';
+import { sessionsAPI, wordSetsAPI } from './services/api';
 import { Activity, Target, Trophy, TrendingUp } from 'lucide-react';
 
-// Sample text for typing practice
-const SAMPLE_TEXT =
-  'The quick brown fox jumps over the lazy dog. ' +
-  'This is a sample typing test to demonstrate the FingerFlow application. ' +
-  'Type carefully and watch your finger performance improve over time. ' +
-  'Focus on accuracy first, then gradually increase your speed.';
+/**
+ * Generate random text from word sets
+ * @param {number} wordCount - Number of words to generate
+ * @returns {Promise<string>} - Generated text string
+ */
+async function generateRandomText(wordCount = 20) {
+  try {
+    // Fetch available word sets
+    const wordSets = await wordSetsAPI.list(0, 100);
+
+    if (!wordSets || wordSets.length === 0) {
+      // Fallback to default text if no word sets available
+      return 'The quick brown fox jumps over the lazy dog. Practice your typing skills with FingerFlow.';
+    }
+
+    // Pick a random word set
+    const randomSet = wordSets[Math.floor(Math.random() * wordSets.length)];
+    const words = randomSet.words || [];
+
+    if (words.length === 0) {
+      return 'The quick brown fox jumps over the lazy dog. Practice your typing skills with FingerFlow.';
+    }
+
+    // Generate random selection of words
+    const selectedWords = [];
+    for (let i = 0; i < wordCount; i++) {
+      const randomWord = words[Math.floor(Math.random() * words.length)];
+      selectedWords.push(randomWord);
+    }
+
+    // Join words with spaces
+    return selectedWords.join(' ');
+  } catch (error) {
+    console.error('Failed to generate random text:', error);
+    // Fallback text
+    return 'The quick brown fox jumps over the lazy dog. Practice your typing skills with FingerFlow.';
+  }
+}
 
 function App() {
   const { isAuthenticated, loading, checkAuth } = useAuth();
@@ -36,6 +68,10 @@ function App() {
   const [lastKeyCode, setLastKeyCode] = useState(null);
   const [startTime, setStartTime] = useState(null);
   const [googleCallbackStatus, setGoogleCallbackStatus] = useState(null); // 'processing', 'success', 'error'
+  const [practiceText, setPracticeText] = useState(''); // Dynamic practice text
+  const [firstKeystrokeTime, setFirstKeystrokeTime] = useState(null); // Time of first keystroke
+  const [lastKeystrokeTime, setLastKeystrokeTime] = useState(null); // Time of last keystroke
+  const [totalKeystrokes, setTotalKeystrokes] = useState(0); // All keystrokes including backspace
 
   // Initialize telemetry
   const { addEvent } = useTelemetry(sessionId, sessionStartTime);
@@ -98,6 +134,10 @@ function App() {
     const sessionStart = Date.now();
     setStartTime(sessionStart);
 
+    // Generate random practice text from word sets (20 words)
+    const text = await generateRandomText(20);
+    setPracticeText(text);
+
     if (isAuthenticated) {
       try {
         const session = await sessionsAPI.create(sessionStart);
@@ -111,37 +151,115 @@ function App() {
 
     setCurrentIndex(0);
     setCharacterStates({});
+    setFirstKeystrokeTime(null);
+    setLastKeystrokeTime(null);
+    setTotalKeystrokes(0);
   };
 
   // End session
-  const endSession = () => {
+  const endSession = async () => {
+    // Send final stats to backend if authenticated
+    if (isAuthenticated && sessionId && firstKeystrokeTime && lastKeystrokeTime) {
+      try {
+        const stats = calculateFinalStats();
+        await sessionsAPI.end(sessionId, {
+          end_time: lastKeystrokeTime,
+          wpm: stats.productiveWPM,
+          mechanical_wpm: stats.mechanicalWPM,
+          accuracy: stats.accuracy,
+          total_characters: practiceText.length,
+          correct_characters: stats.correctCount,
+          incorrect_characters: stats.errorCount,
+          total_keystrokes: totalKeystrokes,
+        });
+      } catch (error) {
+        console.error('Failed to end session:', error);
+      }
+    }
+
+    // Reset state
     setSessionId(null);
     setSessionStartTime(null);
     setCurrentIndex(0);
     setCharacterStates({});
     setStartTime(null);
+    setFirstKeystrokeTime(null);
+    setLastKeystrokeTime(null);
+    setTotalKeystrokes(0);
   };
 
-  // Calculate WPM and accuracy
+  // Calculate WPM and accuracy (for display during typing)
   const calculateStats = () => {
     const correctCount = Object.values(characterStates).filter(s => s === 'correct').length;
     const errorCount = Object.values(characterStates).filter(s => s === 'error').length;
     const totalTyped = correctCount + errorCount;
     const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 0;
 
-    const elapsedMinutes = startTime ? (Date.now() - startTime) / 60000 : 0;
-    const wpm = elapsedMinutes > 0 ? (correctCount / 5) / elapsedMinutes : 0;
+    // Use time from first to current keystroke
+    const elapsedMinutes = firstKeystrokeTime ? (Date.now() - firstKeystrokeTime) / 60000 : 0;
 
-    return { wpm: Math.round(wpm), accuracy: Math.round(accuracy), correctCount, errorCount };
+    // Productive WPM: only correct characters
+    const productiveWPM = elapsedMinutes > 0 ? (correctCount / 5) / elapsedMinutes : 0;
+
+    // Mechanical WPM: all keystrokes
+    const mechanicalWPM = elapsedMinutes > 0 ? (totalKeystrokes / 5) / elapsedMinutes : 0;
+
+    return {
+      wpm: Math.round(productiveWPM),
+      mechanicalWPM: Math.round(mechanicalWPM),
+      accuracy: Math.round(accuracy),
+      correctCount,
+      errorCount
+    };
+  };
+
+  // Calculate final stats (for session end)
+  const calculateFinalStats = () => {
+    const correctCount = Object.values(characterStates).filter(s => s === 'correct').length;
+    const errorCount = Object.values(characterStates).filter(s => s === 'error').length;
+    const totalTyped = correctCount + errorCount;
+    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 0;
+
+    // Use time from first to last keystroke
+    const elapsedMinutes = (firstKeystrokeTime && lastKeystrokeTime)
+      ? (lastKeystrokeTime - firstKeystrokeTime) / 60000
+      : 0;
+
+    // Productive WPM: only correct characters
+    const productiveWPM = elapsedMinutes > 0 ? (correctCount / 5) / elapsedMinutes : 0;
+
+    // Mechanical WPM: all keystrokes
+    const mechanicalWPM = elapsedMinutes > 0 ? (totalKeystrokes / 5) / elapsedMinutes : 0;
+
+    return {
+      productiveWPM,
+      mechanicalWPM,
+      accuracy,
+      correctCount,
+      errorCount,
+    };
   };
 
   // Handle typing
   useEffect(() => {
     const handleKeyPress = (e) => {
-      if (!startTime || currentIndex >= SAMPLE_TEXT.length) return;
+      if (!startTime || !practiceText || currentIndex >= practiceText.length) return;
+
+      const now = Date.now();
+
+      // Track first keystroke time
+      if (!firstKeystrokeTime) {
+        setFirstKeystrokeTime(now);
+      }
+
+      // Track last keystroke time
+      setLastKeystrokeTime(now);
+
+      // Increment total keystrokes
+      setTotalKeystrokes(prev => prev + 1);
 
       // Get the expected character
-      const expectedChar = SAMPLE_TEXT[currentIndex];
+      const expectedChar = practiceText[currentIndex];
       const typedChar = e.key;
 
       // Track key for virtual keyboard
@@ -165,12 +283,49 @@ function App() {
       // Telemetry is automatically handled by useTelemetry hook
     };
 
+    // Handle backspace for corrections
+    const handleKeyDown = (e) => {
+      if (!startTime || !practiceText) return;
+
+      const now = Date.now();
+
+      // Track backspace as a keystroke
+      if (e.key === 'Backspace') {
+        // Track first keystroke if this is the first key
+        if (!firstKeystrokeTime) {
+          setFirstKeystrokeTime(now);
+        }
+
+        // Track last keystroke time
+        setLastKeystrokeTime(now);
+
+        // Increment total keystrokes (backspace counts as a keystroke)
+        setTotalKeystrokes(prev => prev + 1);
+
+        // Allow going back if not at start
+        if (currentIndex > 0) {
+          e.preventDefault();
+          setCurrentIndex(prev => prev - 1);
+          // Clear the state of the previous character
+          setCharacterStates(prev => {
+            const newStates = { ...prev };
+            delete newStates[currentIndex - 1];
+            return newStates;
+          });
+        }
+      }
+    };
+
     window.addEventListener('keypress', handleKeyPress);
-    return () => window.removeEventListener('keypress', handleKeyPress);
-  }, [startTime, currentIndex]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keypress', handleKeyPress);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [startTime, currentIndex, practiceText, firstKeystrokeTime]);
 
   // Check if test is complete
-  const isComplete = currentIndex >= SAMPLE_TEXT.length;
+  const isComplete = practiceText && currentIndex >= practiceText.length;
   const stats = calculateStats();
 
   if (loading || googleCallbackStatus === 'processing') {
@@ -343,41 +498,48 @@ function App() {
           {startTime && !isComplete && (
             <div className="max-w-6xl mx-auto py-12">
               {/* Stats Header */}
-              <div className="flex justify-between items-center mb-10 p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)]">
-                <div className="text-center flex-1 border-r border-[var(--bg-input)]">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>WPM</p>
-                  <p className="text-4xl font-black" style={{ color: 'var(--accent-primary)' }}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Productive WPM</p>
+                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--accent-primary)' }}>
                     {stats.wpm}
                   </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>Correct chars only</p>
                 </div>
-                <div className="text-center flex-1 border-r border-[var(--bg-input)]">
+                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Mechanical WPM</p>
+                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--text-main)' }}>
+                    {stats.mechanicalWPM}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>All keystrokes</p>
+                </div>
+                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
                   <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
-                  <p className="text-4xl font-black" style={{ color: 'var(--status-correct)' }}>
+                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--status-correct)' }}>
                     {stats.accuracy}%
                   </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{stats.correctCount}/{stats.correctCount + stats.errorCount}</p>
                 </div>
-                <div className="text-center flex-1">
+                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
                   <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Progress</p>
-                  <p className="text-4xl font-black" style={{ color: 'var(--text-main)' }}>
-                    {Math.round((currentIndex / SAMPLE_TEXT.length) * 100)}%
+                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--text-main)' }}>
+                    {practiceText ? Math.round((currentIndex / practiceText.length) * 100) : 0}%
                   </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{currentIndex}/{practiceText.length}</p>
                 </div>
               </div>
 
               {/* Typing Display */}
               <div className="mb-12 relative">
-                 {/* Focus Guide Line (Optional visual aid) */}
-                 <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[var(--accent-primary)] opacity-20 transform -translate-x-1/2 pointer-events-none z-0" />
-                 
                 {viewMode === 'ticker' ? (
                   <TickerTape
-                    text={SAMPLE_TEXT}
+                    text={practiceText}
                     currentIndex={currentIndex}
                     characterStates={characterStates}
                   />
                 ) : (
                   <RollingWindow
-                    text={SAMPLE_TEXT}
+                    text={practiceText}
                     currentIndex={currentIndex}
                     characterStates={characterStates}
                   />
@@ -421,34 +583,39 @@ function App() {
               {/* Final Stats */}
               <div className="grid grid-cols-2 gap-6 mb-12">
                 <div className="p-8 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Net Speed</p>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Productive WPM</p>
                   <div className="flex items-baseline justify-center gap-2">
                     <p className="text-6xl font-black" style={{ color: 'var(--accent-primary)' }}>
                       {stats.wpm}
                     </p>
                     <span className="text-lg font-medium opacity-60" style={{ color: 'var(--text-main)' }}>WPM</span>
                   </div>
+                  <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-dim)' }}>Correct characters only</p>
                 </div>
                 <div className="p-8 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Mechanical WPM</p>
                   <div className="flex items-baseline justify-center gap-2">
-                    <p className="text-6xl font-black" style={{ color: 'var(--status-correct)' }}>
-                      {stats.accuracy}
+                    <p className="text-6xl font-black" style={{ color: 'var(--text-main)' }}>
+                      {stats.mechanicalWPM}
                     </p>
-                    <span className="text-lg font-medium opacity-60" style={{ color: 'var(--status-correct)' }}>%</span>
+                    <span className="text-lg font-medium opacity-60" style={{ color: 'var(--text-main)' }}>WPM</span>
                   </div>
+                  <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-dim)' }}>All keystrokes ({totalKeystrokes} total)</p>
                 </div>
                 <div className="p-6 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Correct Keystrokes</p>
-                  <p className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
-                    {stats.correctCount}
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
+                  <p className="text-5xl font-bold" style={{ color: 'var(--status-correct)' }}>
+                    {stats.accuracy}%
                   </p>
+                  <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>{stats.correctCount} correct / {stats.errorCount} errors</p>
                 </div>
                 <div className="p-6 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Errors</p>
-                  <p className="text-3xl font-bold" style={{ color: 'var(--status-error)' }}>
-                    {stats.errorCount}
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Time</p>
+                  <p className="text-5xl font-bold" style={{ color: 'var(--text-main)' }}>
+                    {firstKeystrokeTime && lastKeystrokeTime ?
+                      Math.round((lastKeystrokeTime - firstKeystrokeTime) / 1000) : 0}
                   </p>
+                  <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>seconds</p>
                 </div>
               </div>
 
