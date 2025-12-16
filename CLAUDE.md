@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Stack:**
 - **Backend:** Python 3.10+ with FastAPI (async), SQLAlchemy 2.0+, structlog for JSON logging
 - **Frontend:** React 18+ (functional components, hooks only), CSS Variables for theming, Tailwind CSS for layout geometry only
-- **Database:** SQLite (dev) / PostgreSQL (prod), consider TimescaleDB extension for TelemetryEvent table in production
+- **Database:** PostgreSQL 16 (production and development), consider TimescaleDB extension for TelemetryEvent table for advanced time-series queries
 - **Auth:** JWT with python-jose, Google OAuth2 flow
 
 **Key Architecture Principles:**
@@ -36,30 +36,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Backend Setup
+### Docker-Based Development (Recommended)
+
 ```bash
-# Install dependencies
-pip install -r backend/requirements.txt
+# Start development environment (includes PostgreSQL)
+./scripts/start.sh --dev
 
-# Run development server
-cd backend
-uvicorn main:app --reload --log-level debug
+# View logs
+./scripts/logs.sh --dev
 
-# Database migrations (if using Alembic)
-alembic upgrade head
+# Stop services
+./scripts/stop.sh --dev
+
+# Rebuild containers (after dependency changes)
+./scripts/restart.sh --dev --rebuild
+
+# Check service status
+./scripts/status.sh
 ```
 
-### Frontend Setup
+### Local Development (Without Docker)
+
+**Prerequisites:**
+- PostgreSQL 16+ running locally
+- Create database: `createdb -U postgres fingerflow`
+
 ```bash
-# Install dependencies
-cd frontend
-npm install
+# Backend setup
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# Configure database (create .env from .env.example)
+cp .env.example .env
+# Edit .env and set: DATABASE_URL=postgresql://user:pass@localhost:5432/fingerflow
 
 # Run development server
-npm run dev
+uvicorn main:app --reload --log-level debug
 
-# Build for production
-npm run build
+# Frontend setup
+cd frontend
+npm install
+npm run dev
 ```
 
 ### Testing
@@ -72,6 +91,107 @@ pytest
 cd frontend
 npm test
 ```
+
+### Database Management
+
+**PostgreSQL in Docker (Development & Production):**
+
+```bash
+# Access PostgreSQL CLI
+docker exec -it fingerflow-postgres psql -U fingerflow -d fingerflow
+
+# View database logs
+docker logs fingerflow-postgres
+
+# Monitor connection pool stats
+docker exec -it fingerflow-postgres psql -U fingerflow -d fingerflow -c "SELECT * FROM pg_stat_activity;"
+
+# Check database size
+docker exec -it fingerflow-postgres psql -U fingerflow -d fingerflow -c "SELECT pg_size_pretty(pg_database_size('fingerflow'));"
+```
+
+**Backup & Restore:**
+
+```bash
+# Create backup (with compression)
+docker exec fingerflow-postgres pg_dump -U fingerflow -Fc fingerflow > backup_$(date +%Y%m%d_%H%M%S).dump
+
+# Restore from backup
+docker exec -i fingerflow-postgres pg_restore -U fingerflow -d fingerflow < backup.dump
+
+# SQL format backup (human-readable)
+docker exec fingerflow-postgres pg_dump -U fingerflow fingerflow > backup.sql
+
+# Restore SQL backup
+docker exec -i fingerflow-postgres psql -U fingerflow fingerflow < backup.sql
+```
+
+**Performance Tuning for TelemetryEvent Table:**
+
+The TelemetryEvent table is high-frequency and benefits from PostgreSQL-specific optimizations:
+
+```sql
+-- Create index for session-based queries
+CREATE INDEX idx_telemetry_session_time ON telemetry_events(session_id, timestamp_offset);
+
+-- Optional: Enable TimescaleDB extension for time-series optimization
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+SELECT create_hypertable('telemetry_events', 'created_at', if_not_exists => TRUE);
+
+-- Monitor table bloat
+SELECT schemaname, tablename,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_tables WHERE tablename = 'telemetry_events';
+```
+
+**Connection Pooling Configuration:**
+
+The backend uses SQLAlchemy connection pooling (configured in `app/database.py`):
+- `pool_size=10`: Number of persistent connections
+- `max_overflow=20`: Additional connections during peak load
+- `pool_pre_ping=True`: Validates connections before use (prevents stale connections)
+
+### Production Deployment
+
+**PostgreSQL Production Checklist:**
+
+1. **Environment Variables** (set in `.env` or Docker secrets):
+   ```bash
+   DATABASE_URL=postgresql://fingerflow:STRONG_PASSWORD@postgres:5432/fingerflow
+   SECRET_KEY=generate-with-openssl-rand-hex-32
+   POSTGRES_PASSWORD=use-strong-password-here
+   ```
+
+2. **Security Hardening:**
+   - Change default PostgreSQL password (never use `fingerflow_dev_password`)
+   - Use environment-based secrets management (Docker secrets, Kubernetes secrets, AWS Secrets Manager)
+   - Restrict PostgreSQL port (don't expose 5432 publicly)
+   - Enable SSL/TLS for PostgreSQL connections in production
+
+3. **Persistent Volume:**
+   - The `postgres-data` volume ensures data persists across container restarts
+   - Backup strategy: Schedule daily `pg_dump` via cron or backup service
+   - Consider point-in-time recovery (PITR) with WAL archiving for critical data
+
+4. **Monitoring:**
+   ```bash
+   # Check service health
+   ./scripts/status.sh
+
+   # Monitor database performance
+   docker exec -it fingerflow-postgres psql -U fingerflow -d fingerflow \
+     -c "SELECT * FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10;"
+   ```
+
+5. **Migration from SQLite:**
+   - Export SQLite data: `sqlite3 fingerflow.db .dump > sqlite_export.sql`
+   - Manually convert to PostgreSQL schema (timestamps, autoincrement differences)
+   - Or use tools like `pgloader` for automated migration
+
+6. **Scaling Considerations:**
+   - For high-traffic deployments, consider read replicas
+   - Use connection pooling middleware (PgBouncer) for >1000 concurrent users
+   - Enable TimescaleDB extension for efficient telemetry time-series queries
 
 ## Critical Implementation Guidelines
 

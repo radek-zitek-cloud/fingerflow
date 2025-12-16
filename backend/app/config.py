@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Database
-    database_url: str = "sqlite:///./data/fingerflow.db"
+    database_url: str = "postgresql://fingerflow:fingerflow_dev_password@localhost:5432/fingerflow"
 
     # JWT
     secret_key: str = "dev-secret-key-change-in-production"

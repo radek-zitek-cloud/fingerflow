@@ -22,13 +22,22 @@ def _normalize_database_url(database_url: str) -> str:
     if database_url.startswith("sqlite+aiosqlite://"):
         return database_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
     if database_url.startswith("postgresql+asyncpg://"):
-        return database_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    # Ensure psycopg2 is used for PostgreSQL (not psycopg3)
+    if database_url.startswith("postgresql://") and "?" not in database_url:
+        return database_url
     return database_url
 
 
-def _sqlite_connect_args(database_url: str) -> dict:
+def _get_connect_args(database_url: str) -> dict:
+    """Get connection arguments based on database type."""
     if database_url.startswith("sqlite:"):
         return {"check_same_thread": False}
+    # PostgreSQL connection pooling settings
+    elif database_url.startswith("postgresql://"):
+        return {
+            "connect_timeout": 10,
+        }
     return {}
 
 
@@ -38,7 +47,10 @@ engine = create_engine(
     database_url,
     echo=settings.log_level == "DEBUG",
     future=True,
-    connect_args=_sqlite_connect_args(database_url),
+    connect_args=_get_connect_args(database_url),
+    pool_pre_ping=True,  # Enable connection health checks
+    pool_size=10,  # Connection pool size
+    max_overflow=20,  # Max overflow connections
 )
 
 SessionLocal = sessionmaker(
@@ -55,10 +67,16 @@ Base = declarative_base()
 def init_db() -> None:
     """Initialize database tables.
 
-    SQLite only auto-increments PRIMARY KEY when the type is exactly INTEGER.
-    If older dev DBs were created with BIGINT primary keys, inserts will fail.
-    Recreate the schema automatically only if affected tables are empty.
+    Creates all tables defined in SQLAlchemy models if they don't exist.
+    For PostgreSQL, this handles schema creation properly.
+    For SQLite (legacy dev mode), ensures proper autoincrement.
     """
+    # PostgreSQL handles schema creation cleanly
+    if engine.dialect.name == "postgresql":
+        Base.metadata.create_all(bind=engine)
+        return
+
+    # SQLite legacy support (for local development without Docker)
     if engine.dialect.name == "sqlite":
         with engine.connect() as conn:
             tables_to_check = [
@@ -68,6 +86,7 @@ def init_db() -> None:
                 "password_reset_tokens",
                 "email_verification_tokens",
                 "refresh_tokens",
+                "word_sets",
             ]
 
             def table_exists(name: str) -> bool:

@@ -2,6 +2,26 @@
 # Production-ready setup with health checks and proper networking
 
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fingerflow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=fingerflow
+      - POSTGRES_USER=fingerflow
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fingerflow_prod_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - fingerflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fingerflow -d fingerflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Backend API service
   backend:
     image: fingerflow-backend:latest
@@ -13,7 +33,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./data/fingerflow.db
+      - DATABASE_URL=postgresql://fingerflow:${POSTGRES_PASSWORD:-fingerflow_prod_password}@postgres:5432/fingerflow
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -27,8 +47,9 @@ services:
       - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_REQUESTS=100
       - RATE_LIMIT_WINDOW_SECONDS=60
-    volumes:
-      - backend-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - fingerflow-network
     healthcheck:
@@ -65,5 +86,5 @@ networks:
     driver: bridge
 
 volumes:
-  backend-data:
+  postgres-data:
     driver: local
