@@ -52,7 +52,12 @@ class SessionEnd(BaseModel):
     correct_characters: int = Field(..., ge=0, description="Number of correctly typed characters")
     incorrect_characters: int = Field(..., ge=0, description="Number of incorrectly typed characters")
     total_keystrokes: int = Field(..., ge=0, description="Total keystrokes including corrections")
-    practice_text: str = Field(..., description="The practice text that was typed in this session")
+    practice_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="The practice text that was typed in this session"
+    )
 
 
 class SessionResponse(BaseModel):
