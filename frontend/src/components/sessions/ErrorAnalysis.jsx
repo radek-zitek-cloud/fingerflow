@@ -27,6 +27,14 @@ export function ErrorAnalysis({ sessionId }) {
         setError(null);
         const data = await sessionsAPI.getDetailedTelemetry(sessionId);
         setDetailedTelemetry(data);
+
+        // Warn if data was truncated
+        if (data.truncated) {
+          console.warn(
+            `Session ${sessionId} detailed data was truncated. Showing ${data.count} events. ` +
+            `Error analysis may be incomplete.`
+          );
+        }
       } catch (err) {
         console.error('Failed to load detailed telemetry:', err);
         setError('Failed to load error analysis data');

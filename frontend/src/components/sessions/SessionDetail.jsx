@@ -36,6 +36,14 @@ export function SessionDetail({ sessionId, onNavigate }) {
 
         setSession(sessionData);
         setTelemetry(telemetryData);
+
+        // Warn if data was truncated
+        if (telemetryData.truncated) {
+          console.warn(
+            `Session ${sessionId} data was truncated. Showing ${telemetryData.count} events. ` +
+            `This session may be too long for complete analysis.`
+          );
+        }
       } catch (err) {
         console.error('Failed to load session details:', err);
         setError('Failed to load session details');
@@ -146,6 +154,24 @@ export function SessionDetail({ sessionId, onNavigate }) {
       <h1 className="text-3xl font-bold mb-8" style={{ color: 'var(--text-main)' }}>
         Session Analysis
       </h1>
+
+      {/* Data Truncation Warning */}
+      {telemetry && telemetry.truncated && (
+        <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', borderLeft: '4px solid #f59e0b' }}>
+          <div className="flex items-start gap-3">
+            <Activity className="w-5 h-5 mt-0.5" style={{ color: '#f59e0b' }} />
+            <div>
+              <p className="font-semibold" style={{ color: '#f59e0b' }}>
+                Large Session - Data Truncated
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>
+                This session has a very large number of keystrokes. Analysis is based on the first {telemetry.count} events.
+                Results may not represent the complete session.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Statistics Panel */}
       <div className="mb-12">

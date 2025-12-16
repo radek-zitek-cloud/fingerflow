@@ -25,6 +25,14 @@ export function FingerAnalysis({ sessionId }) {
         setLoading(true);
         setError(null);
         const data = await sessionsAPI.getDetailedTelemetry(sessionId);
+
+        // Warn if data was truncated
+        if (data.truncated) {
+          console.warn(
+            `Session ${sessionId} detailed data was truncated. Showing ${data.count} events. ` +
+            `Analysis may be incomplete.`
+          );
+        }
         setDetailedTelemetry(data);
       } catch (err) {
         console.error('Failed to load detailed telemetry:', err);

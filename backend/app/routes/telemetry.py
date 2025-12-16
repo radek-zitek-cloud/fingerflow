@@ -96,6 +96,7 @@ async def get_session_telemetry(
     session_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    limit: int = None,  # Optional limit for debugging, default returns all
 ):
     """
     Retrieve telemetry events for detailed session analysis.
@@ -106,6 +107,12 @@ async def get_session_telemetry(
     - Error pattern analysis
 
     Returns 50% less data than including both DOWN and UP events.
+
+    Performance Notes:
+    - Default behavior returns ALL events (required for complete analysis)
+    - Typical session: 1-2 minutes = ~2,500 DOWN events
+    - Safety limit: 20,000 events (prevents abuse from extremely long sessions)
+    - Use 'limit' parameter for debugging or partial data retrieval
     """
     # Validate that session exists and belongs to current user
     result = db.execute(
@@ -128,15 +135,23 @@ async def get_session_telemetry(
             detail="Session not found or access denied",
         )
 
+    # Safety limit: Cap at 20,000 events to prevent abuse
+    # (enough for ~8 minutes at 100 WPM)
+    MAX_EVENTS = 20000
+    effective_limit = min(limit, MAX_EVENTS) if limit else MAX_EVENTS
+
     # Fetch DOWN events only, ordered by timestamp
-    result = db.execute(
+    query = (
         select(TelemetryEvent)
         .where(
             TelemetryEvent.session_id == session_id,
             TelemetryEvent.event_type == EventType.DOWN
         )
         .order_by(TelemetryEvent.timestamp_offset)
+        .limit(effective_limit)
     )
+
+    result = db.execute(query)
     events = result.scalars().all()
 
     logger.info(
@@ -144,6 +159,7 @@ async def get_session_telemetry(
         session_id=session_id,
         user_id=current_user.id,
         event_count=len(events),
+        limit_applied=effective_limit,
     )
 
     return {
@@ -155,7 +171,9 @@ async def get_session_telemetry(
                 "is_error": event.is_error,
             }
             for event in events
-        ]
+        ],
+        "count": len(events),
+        "truncated": len(events) >= effective_limit,
     }
 
 
@@ -164,6 +182,7 @@ async def get_detailed_telemetry(
     session_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    limit: int = None,  # Optional limit for debugging, default returns all
 ):
     """
     Retrieve complete telemetry events (both DOWN and UP) for biomechanical analysis.
@@ -176,6 +195,13 @@ async def get_detailed_telemetry(
 
     This endpoint returns twice the data of the regular telemetry endpoint
     but is necessary for detailed biomechanical analysis.
+
+    Performance Notes:
+    - Default behavior returns ALL events (required for complete analysis)
+    - Typical session: 1-2 minutes = ~5,000 events (DOWN + UP)
+    - Safety limit: 40,000 events (prevents abuse from extremely long sessions)
+    - Use 'limit' parameter for debugging or partial data retrieval
+    - For complete dwell time analysis, both DOWN and UP events are required
     """
     # Validate that session exists and belongs to current user
     result = db.execute(
@@ -198,12 +224,20 @@ async def get_detailed_telemetry(
             detail="Session not found or access denied",
         )
 
+    # Safety limit: Cap at 40,000 events to prevent abuse
+    # (enough for ~8 minutes at 100 WPM with DOWN+UP events)
+    MAX_EVENTS = 40000
+    effective_limit = min(limit, MAX_EVENTS) if limit else MAX_EVENTS
+
     # Fetch ALL events (both DOWN and UP), ordered by timestamp
-    result = db.execute(
+    query = (
         select(TelemetryEvent)
         .where(TelemetryEvent.session_id == session_id)
         .order_by(TelemetryEvent.timestamp_offset)
+        .limit(effective_limit)
     )
+
+    result = db.execute(query)
     events = result.scalars().all()
 
     logger.info(
@@ -211,6 +245,7 @@ async def get_detailed_telemetry(
         session_id=session_id,
         user_id=current_user.id,
         event_count=len(events),
+        limit_applied=effective_limit,
     )
 
     return {
@@ -224,5 +259,7 @@ async def get_detailed_telemetry(
                 "is_error": event.is_error,
             }
             for event in events
-        ]
+        ],
+        "count": len(events),
+        "truncated": len(events) >= effective_limit,
     }
