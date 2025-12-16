@@ -36,12 +36,37 @@ class TypingSession(Base):
     wpm: Mapped[Optional[float]] = mapped_column(
         Float,
         nullable=True,
-        comment="Words per minute (calculated at session end)"
+        comment="Productive WPM - only correct characters (calculated at session end)"
+    )
+    mechanical_wpm: Mapped[Optional[float]] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Mechanical WPM - all keystrokes including errors and corrections"
     )
     accuracy: Mapped[Optional[float]] = mapped_column(
         Float,
         nullable=True,
         comment="Accuracy percentage (calculated at session end)"
+    )
+    total_characters: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Total characters in the test text"
+    )
+    correct_characters: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Number of correctly typed characters"
+    )
+    incorrect_characters: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Number of incorrectly typed characters"
+    )
+    total_keystrokes: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Total keystrokes including corrections (backspace, etc.)"
     )
 
     # Relationships

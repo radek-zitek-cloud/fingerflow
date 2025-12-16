@@ -180,14 +180,10 @@ export const sessionsAPI = {
     return fetchWithAuth(`/api/sessions?limit=${limit}&offset=${offset}`);
   },
 
-  async end(sessionId, endTime, wpm, accuracy) {
+  async end(sessionId, sessionEndData) {
     return fetchWithAuth(`/api/sessions/${sessionId}/end`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        end_time: endTime,
-        wpm,
-        accuracy,
-      }),
+      body: JSON.stringify(sessionEndData),
     });
   },
 };

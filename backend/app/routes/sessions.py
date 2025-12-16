@@ -7,7 +7,7 @@ from typing import List
 from app.database import get_db
 from app.models.user import User
 from app.models.typing_session import TypingSession
-from app.schemas.telemetry import SessionCreate, SessionResponse
+from app.schemas.telemetry import SessionCreate, SessionResponse, SessionEnd
 from app.utils.auth import get_current_user
 from app.logging_config import get_logger
 
@@ -103,9 +103,7 @@ async def list_sessions(
 @router.patch("/{session_id}/end", response_model=SessionResponse)
 async def end_session(
     session_id: int,
-    end_time: int,
-    wpm: float,
-    accuracy: float,
+    session_end: SessionEnd,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -113,6 +111,7 @@ async def end_session(
     Mark a session as completed and update final metrics.
 
     The frontend should call this when the user finishes typing.
+    Includes both productive WPM (correct chars only) and mechanical WPM (all keystrokes).
     """
     result = db.execute(
         select(TypingSession).where(
@@ -128,9 +127,15 @@ async def end_session(
             detail="Session not found",
         )
 
-    session.end_time = end_time
-    session.wpm = wpm
-    session.accuracy = accuracy
+    # Update session with final metrics
+    session.end_time = session_end.end_time
+    session.wpm = session_end.wpm
+    session.mechanical_wpm = session_end.mechanical_wpm
+    session.accuracy = session_end.accuracy
+    session.total_characters = session_end.total_characters
+    session.correct_characters = session_end.correct_characters
+    session.incorrect_characters = session_end.incorrect_characters
+    session.total_keystrokes = session_end.total_keystrokes
 
     db.commit()
     db.refresh(session)
@@ -139,8 +144,10 @@ async def end_session(
         "session_ended",
         session_id=session.id,
         user_id=current_user.id,
-        wpm=wpm,
-        accuracy=accuracy,
+        wpm=session_end.wpm,
+        mechanical_wpm=session_end.mechanical_wpm,
+        accuracy=session_end.accuracy,
+        total_keystrokes=session_end.total_keystrokes,
     )
 
     return session

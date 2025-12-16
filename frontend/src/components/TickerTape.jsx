@@ -13,37 +13,64 @@ import { useState, useEffect, useRef } from 'react';
 
 export function TickerTape({ text, currentIndex, characterStates }) {
   const containerRef = useRef(null);
-  const [charWidth, setCharWidth] = useState(20); // Estimated character width in px
+  const wrapperRef = useRef(null);
+  const [charWidth, setCharWidth] = useState(20); // Character width including letter spacing
+  const [containerWidth, setContainerWidth] = useState(1024);
 
-  // Calculate character width on mount
+  // Measure both character width and container width
   useEffect(() => {
-    if (containerRef.current) {
+    const measureDimensions = () => {
+      // Measure character width with letter spacing
       const span = document.createElement('span');
       span.style.visibility = 'hidden';
       span.style.position = 'absolute';
       span.style.fontSize = '2rem';
       span.style.fontFamily = 'monospace';
-      span.textContent = 'M'; // Use 'M' for measurement (widest character)
+      span.style.letterSpacing = '0.1em';
+      span.textContent = 'M';
       document.body.appendChild(span);
       const width = span.offsetWidth;
       document.body.removeChild(span);
       setCharWidth(width);
-    }
+
+      // Measure actual container width
+      if (wrapperRef.current) {
+        setContainerWidth(wrapperRef.current.offsetWidth);
+      }
+    };
+
+    measureDimensions();
+  }, []);
+
+  // Handle window resize to recalculate dimensions
+  useEffect(() => {
+    const handleResize = () => {
+      if (wrapperRef.current) {
+        setContainerWidth(wrapperRef.current.offsetWidth);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Calculate translateX offset to keep current character centered
-  const translateX = -currentIndex * charWidth + (window.innerWidth / 2) - (charWidth / 2);
+  // Formula: move left by (currentIndex * charWidth), then shift right to center of container
+  const translateX = -currentIndex * charWidth + (containerWidth / 2) - (charWidth / 2);
 
   return (
-    <div className="ticker-tape-wrapper h-32 overflow-hidden relative">
+    <div ref={wrapperRef} className="ticker-tape-wrapper h-32 overflow-hidden relative flex items-center">
       <div
         ref={containerRef}
         className="ticker-tape-container absolute whitespace-nowrap"
         style={{
-          transform: `translateX(${translateX}px)`,
+          left: 0,
+          top: '50%',
+          transform: `translate(${translateX}px, -50%)`,
           fontSize: '2rem',
           fontFamily: 'monospace',
           letterSpacing: '0.1em',
+          transition: 'transform 150ms linear',
         }}
       >
         {text.split('').map((char, index) => {

@@ -9,30 +9,68 @@
  * - Smooth "typewriter return" feel
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 
-export function RollingWindow({ text, currentIndex, characterStates, lineLength = 60 }) {
-  // Split text into lines
+export function RollingWindow({ text, currentIndex, characterStates }) {
+  const wrapperRef = useRef(null);
+  const [charsPerLine, setCharsPerLine] = useState(40); // Dynamic based on container
+
+  // Measure container and calculate characters per line
+  useEffect(() => {
+    const measureContainer = () => {
+      if (!wrapperRef.current) return;
+
+      // Measure character width with the actual font settings
+      const span = document.createElement('span');
+      span.style.visibility = 'hidden';
+      span.style.position = 'absolute';
+      span.style.fontSize = '2.25rem'; // text-4xl
+      span.style.fontFamily = 'monospace';
+      span.style.letterSpacing = '0.05em';
+      span.textContent = 'M';
+      document.body.appendChild(span);
+      const charWidth = span.offsetWidth;
+      document.body.removeChild(span);
+
+      // Get container width and calculate how many characters fit
+      const containerWidth = wrapperRef.current.offsetWidth;
+      const padding = 32; // Account for some padding
+      const availableWidth = containerWidth - padding;
+      const calculatedChars = Math.floor(availableWidth / charWidth);
+
+      setCharsPerLine(Math.max(20, calculatedChars)); // Minimum 20 chars
+    };
+
+    measureContainer();
+
+    // Recalculate on window resize
+    window.addEventListener('resize', measureContainer);
+    return () => window.removeEventListener('resize', measureContainer);
+  }, []);
+
+  // Split text into lines based on measured container width
   const lines = useMemo(() => {
     const words = text.split(' ');
     const result = [];
     let currentLine = '';
 
     words.forEach(word => {
-      if ((currentLine + word).length > lineLength) {
-        result.push(currentLine.trim());
-        currentLine = word + ' ';
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+
+      if (testLine.length > charsPerLine && currentLine) {
+        result.push(currentLine);
+        currentLine = word;
       } else {
-        currentLine += word + ' ';
+        currentLine = testLine;
       }
     });
 
-    if (currentLine.trim()) {
-      result.push(currentLine.trim());
+    if (currentLine) {
+      result.push(currentLine);
     }
 
     return result;
-  }, [text, lineLength]);
+  }, [text, charsPerLine]);
 
   // Calculate which line the current index is on
   const getCurrentLineIndex = () => {
@@ -65,6 +103,7 @@ export function RollingWindow({ text, currentIndex, characterStates, lineLength 
 
   return (
     <div
+      ref={wrapperRef}
       className="rolling-window-wrapper overflow-hidden relative"
       style={{ height: `${visibleLines * lineHeight}px` }}
     >
@@ -72,6 +111,7 @@ export function RollingWindow({ text, currentIndex, characterStates, lineLength 
         className="rolling-window-container"
         style={{
           transform: `translateY(${translateY}px)`,
+          transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
         {lines.map((line, lineIndex) => {
@@ -88,6 +128,8 @@ export function RollingWindow({ text, currentIndex, characterStates, lineLength 
                 alignItems: 'center',
                 justifyContent: 'center',
                 letterSpacing: '0.05em',
+                maxWidth: '100%',
+                overflow: 'hidden',
               }}
             >
               {line.split('').map((char, charIndexInLine) => {
