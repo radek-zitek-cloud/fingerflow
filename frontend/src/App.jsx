@@ -14,6 +14,7 @@ import { TickerTape } from './components/TickerTape';
 import { RollingWindow } from './components/RollingWindow';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { SessionHistory } from './components/sessions/SessionHistory';
+import { SessionDetail } from './components/sessions/SessionDetail';
 import { SessionProgressChart } from './components/sessions/SessionProgressChart';
 import { TypingStatistics } from './components/sessions/TypingStatistics';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -78,7 +79,8 @@ async function generateRandomText(wordCount = 20, wordSetId = null, availableWor
 
 function App() {
   const { isAuthenticated, loading, checkAuth, user } = useAuth();
-  const [currentPage, setCurrentPage] = useState('home'); // 'home', 'auth', 'profile'
+  const [currentPage, setCurrentPage] = useState('home'); // 'home', 'auth', 'profile', 'session-detail'
+  const [selectedSessionId, setSelectedSessionId] = useState(null); // For session detail page
   const [theme, setTheme] = useState('default');
   const [viewMode, setViewMode] = useState('ticker'); // 'ticker' or 'rolling'
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -106,6 +108,7 @@ function App() {
   const [wordSets, setWordSets] = useState([]); // available word sets
 
   // Initialize telemetry
+  // Always use sessionStartTime as reference for consistent offsets
   const { addEvent, flush } = useTelemetry(sessionId, sessionStartTime);
 
   // Handle Google OAuth callback
@@ -273,7 +276,15 @@ function App() {
     if (isAuthenticated && sessionId && firstKeystrokeTime && lastKeystrokeTime) {
       try {
         const stats = calculateFinalStats();
+
+        // Validate practice text before saving
+        if (!practiceText || practiceText.length === 0) {
+          console.error('Invalid practice text when saving session');
+          return;
+        }
+
         await sessionsAPI.end(sessionId, {
+          start_time: firstKeystrokeTime,
           end_time: lastKeystrokeTime,
           wpm: stats.productiveWPM,
           mechanical_wpm: stats.mechanicalWPM,
@@ -282,6 +293,7 @@ function App() {
           correct_characters: stats.correctCount,
           incorrect_characters: stats.errorCount,
           total_keystrokes: totalKeystrokes,
+          practice_text: practiceText,
         });
       } catch (error) {
         console.error('Failed to save session:', error);
@@ -325,6 +337,12 @@ function App() {
     setTotalKeystrokes(0);
     setTotalErrors(0);
     setTimeRemaining(null);
+  };
+
+  // Navigate to session detail page
+  const handleNavigateToSessionDetail = (sessionId) => {
+    setSelectedSessionId(sessionId);
+    setCurrentPage('session-detail');
   };
 
   // Calculate WPM and accuracy (for display during typing)
@@ -413,7 +431,8 @@ function App() {
       const now = Date.now();
 
       // Track first keystroke time
-      if (!firstKeystrokeTime) {
+      const isFirstKeystroke = !firstKeystrokeTime;
+      if (isFirstKeystroke) {
         setFirstKeystrokeTime(now);
       }
 
@@ -428,8 +447,9 @@ function App() {
         setTotalKeystrokes(prev => prev + 1);
 
         // Send telemetry for backspace DOWN event (not an error)
+        // Pass explicit timestamp for first keystroke to ensure correct offset
         if (sessionId) {
-          addEvent('DOWN', e.code, false);
+          addEvent('DOWN', e.code, false, now);
         }
 
         // Allow going back if not at start
@@ -480,8 +500,9 @@ function App() {
       }
 
       // Send telemetry for keydown event with error flag
+      // Pass explicit timestamp for first keystroke to ensure correct offset
       if (sessionId) {
-        addEvent('DOWN', e.code, !isCorrect);
+        addEvent('DOWN', e.code, !isCorrect, now);
       }
 
       // Update character state
@@ -513,11 +534,13 @@ function App() {
 
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+      const now = Date.now();
+
       // Send telemetry for keyup event
       // For error tracking, we check if the current position has an error state
       if (sessionId && (e.key.length === 1 || e.key === 'Backspace')) {
         const isError = characterStates[currentIndex] === 'error' || characterStates[currentIndex - 1] === 'error';
-        addEvent('UP', e.code, isError);
+        addEvent('UP', e.code, isError, now);
       }
     };
 
@@ -609,6 +632,11 @@ function App() {
       {/* Word Sets Manager */}
       {currentPage === 'word-sets' && isAuthenticated && (
         <WordSetManager onNavigate={setCurrentPage} />
+      )}
+
+      {/* Session Detail Page */}
+      {currentPage === 'session-detail' && isAuthenticated && selectedSessionId && (
+        <SessionDetail sessionId={selectedSessionId} onNavigate={setCurrentPage} />
       )}
 
       {/* Home Page / Typing Test */}
@@ -875,7 +903,7 @@ function App() {
                 <div className="mt-16 space-y-16">
                   <SessionProgressChart />
                   <TypingStatistics />
-                  <SessionHistory />
+                  <SessionHistory onNavigateToDetail={handleNavigateToSessionDetail} />
                 </div>
               )}
 

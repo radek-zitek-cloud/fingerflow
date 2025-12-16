@@ -43,6 +43,7 @@ class SessionCreate(BaseModel):
 class SessionEnd(BaseModel):
     """Schema for ending a typing session with final metrics."""
 
+    start_time: int = Field(..., description="Unix timestamp in milliseconds of first keystroke")
     end_time: int = Field(..., description="Unix timestamp in milliseconds of last keystroke")
     wpm: float = Field(..., ge=0, description="Productive WPM (only correct characters)")
     mechanical_wpm: float = Field(..., ge=0, description="Mechanical WPM (all keystrokes)")
@@ -51,6 +52,7 @@ class SessionEnd(BaseModel):
     correct_characters: int = Field(..., ge=0, description="Number of correctly typed characters")
     incorrect_characters: int = Field(..., ge=0, description="Number of incorrectly typed characters")
     total_keystrokes: int = Field(..., ge=0, description="Total keystrokes including corrections")
+    practice_text: str = Field(..., description="The practice text that was typed in this session")
 
 
 class SessionResponse(BaseModel):
@@ -67,6 +69,7 @@ class SessionResponse(BaseModel):
     correct_characters: int | None
     incorrect_characters: int | None
     total_keystrokes: int | None
+    practice_text: str | None
 
     class Config:
         from_attributes = True

@@ -128,6 +128,7 @@ async def end_session(
         )
 
     # Update session with final metrics
+    session.start_time = session_end.start_time
     session.end_time = session_end.end_time
     session.wpm = session_end.wpm
     session.mechanical_wpm = session_end.mechanical_wpm
@@ -136,6 +137,7 @@ async def end_session(
     session.correct_characters = session_end.correct_characters
     session.incorrect_characters = session_end.incorrect_characters
     session.total_keystrokes = session_end.total_keystrokes
+    session.practice_text = session_end.practice_text
 
     db.commit()
     db.refresh(session)

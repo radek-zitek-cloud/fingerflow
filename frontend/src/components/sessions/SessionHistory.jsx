@@ -6,9 +6,9 @@
 
 import { useState, useEffect } from 'react';
 import { sessionsAPI } from '../../services/api';
-import { Clock, Target, TrendingUp, Calendar, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Clock, Target, TrendingUp, Calendar, ChevronLeft, ChevronRight, Trash2, Eye } from 'lucide-react';
 
-export function SessionHistory() {
+export function SessionHistory({ onNavigateToDetail }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -142,6 +142,7 @@ export function SessionHistory() {
                 </div>
               </th>
               <th className="w-16"></th>
+              <th className="w-16"></th>
             </tr>
           </thead>
           <tbody>
@@ -170,6 +171,15 @@ export function SessionHistory() {
                 </td>
                 <td className="p-4">
                   <button
+                    onClick={() => onNavigateToDetail(session.id)}
+                    className="p-2 rounded-lg hover:bg-[var(--accent-primary)] hover:bg-opacity-10 text-[var(--text-dim)] hover:text-[var(--accent-primary)] transition-colors"
+                    title="View session details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </td>
+                <td className="p-4">
+                  <button
                     onClick={() => handleDeleteSession(session.id)}
                     className="p-2 rounded-lg hover:bg-[var(--status-error)] hover:bg-opacity-10 text-[var(--text-dim)] hover:text-[var(--status-error)] transition-colors"
                     title="Delete session"
@@ -187,15 +197,24 @@ export function SessionHistory() {
       <div className="md:hidden space-y-3">
         {sessions.map((session) => (
           <div key={session.id} className="glass-panel p-4 rounded-xl relative">
-            <button
-              onClick={() => handleDeleteSession(session.id)}
-              className="absolute top-3 right-3 p-2 rounded-lg hover:bg-[var(--status-error)] hover:bg-opacity-10 text-[var(--text-dim)] hover:text-[var(--status-error)] transition-colors"
-              title="Delete session"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <div className="absolute top-3 right-3 flex gap-1">
+              <button
+                onClick={() => onNavigateToDetail(session.id)}
+                className="p-2 rounded-lg hover:bg-[var(--accent-primary)] hover:bg-opacity-10 text-[var(--text-dim)] hover:text-[var(--accent-primary)] transition-colors"
+                title="View session details"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleDeleteSession(session.id)}
+                className="p-2 rounded-lg hover:bg-[var(--status-error)] hover:bg-opacity-10 text-[var(--text-dim)] hover:text-[var(--status-error)] transition-colors"
+                title="Delete session"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
 
-            <div className="mb-3 pr-10">
+            <div className="mb-3 pr-20">
               <div className="font-medium" style={{ color: 'var(--text-main)' }}>
                 {formatDateTime(session.start_time)}
               </div>

@@ -192,6 +192,14 @@ export const sessionsAPI = {
       method: 'DELETE',
     });
   },
+
+  async getTelemetry(sessionId) {
+    return fetchWithAuth(`/api/sessions/${sessionId}/telemetry`);
+  },
+
+  async getDetailedTelemetry(sessionId) {
+    return fetchWithAuth(`/api/sessions/${sessionId}/telemetry/detailed`);
+  },
 };
 
 /**

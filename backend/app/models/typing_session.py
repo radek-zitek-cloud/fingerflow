@@ -1,5 +1,5 @@
 """TypingSession model for tracking individual typing sessions."""
-from sqlalchemy import BigInteger, Float, ForeignKey, Index
+from sqlalchemy import BigInteger, Float, ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List
 from app.database import Base
@@ -67,6 +67,11 @@ class TypingSession(Base):
         BigInteger,
         nullable=True,
         comment="Total keystrokes including corrections (backspace, etc.)"
+    )
+    practice_text: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="The practice text that was typed in this session"
     )
 
     # Relationships

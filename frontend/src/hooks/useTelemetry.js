@@ -103,11 +103,16 @@ export function useTelemetry(sessionId, sessionStartTime) {
 
   /**
    * Add event to buffer and check if flush is needed
+   * @param {string} eventType - 'DOWN' or 'UP'
+   * @param {string} keyCode - KeyboardEvent.code
+   * @param {boolean} isError - Whether this keystroke was incorrect
+   * @param {number} timestamp - Optional explicit timestamp (defaults to Date.now())
    */
-  const addEvent = useCallback((eventType, keyCode, isError = false) => {
+  const addEvent = useCallback((eventType, keyCode, isError = false, timestamp = null) => {
     if (!sessionId) return;
 
-    const timestampOffset = Date.now() - sessionStartRef.current;
+    const eventTime = timestamp || Date.now();
+    const timestampOffset = eventTime - sessionStartRef.current;
     const fingerUsed = mapKeyToFinger(keyCode);
 
     const event = {
