@@ -15,6 +15,7 @@ import { RollingWindow } from './components/RollingWindow';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { SessionHistory } from './components/sessions/SessionHistory';
 import { SessionProgressChart } from './components/sessions/SessionProgressChart';
+import { TypingStatistics } from './components/sessions/TypingStatistics';
 import { useTelemetry } from './hooks/useTelemetry';
 import { sessionsAPI, wordSetsAPI } from './services/api';
 import { Activity, Target, Trophy, TrendingUp } from 'lucide-react';
@@ -869,11 +870,12 @@ function App() {
                 </p>
               )}
 
-              {/* Session History for Authenticated Users */}
+              {/* Progress Chart, Statistics, and Session History for Authenticated Users */}
               {isAuthenticated && (
                 <div className="mt-16 space-y-16">
-                  <SessionHistory />
                   <SessionProgressChart />
+                  <TypingStatistics />
+                  <SessionHistory />
                 </div>
               )}
 
