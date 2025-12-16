@@ -58,6 +58,11 @@
   color: var(--status-correct);
 }
 
+.character-corrected {
+  color: var(--status-corrected);
+  font-weight: 500;
+}
+
 .character-error {
   color: var(--status-error);
   font-weight: 600;

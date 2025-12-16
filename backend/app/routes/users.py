@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 class ProfileUpdate(BaseModel):
     """Schema for updating user profile."""
     email: EmailStr
+    theme: str | None = None
 
 
 class PasswordChange(BaseModel):
@@ -73,19 +74,26 @@ async def update_profile(
 
     # Update email
     current_user.email = profile_data.email
+
+    # Update theme if provided
+    if profile_data.theme is not None:
+        current_user.theme = profile_data.theme
+
     db.commit()
     db.refresh(current_user)
 
     logger.info(
         "profile_updated",
         user_id=current_user.id,
-        new_email=profile_data.email
+        new_email=profile_data.email,
+        theme=current_user.theme
     )
 
     return {
         "status": "success",
         "message": "Profile updated successfully",
         "email": current_user.email,
+        "theme": current_user.theme,
     }
 
 

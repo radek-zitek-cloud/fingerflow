@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, Settings, Menu, X, BookOpen } from 'lucide-react';
+import { User, LogOut, Settings, Menu, X } from 'lucide-react';
 
 export function Navbar({ onNavigate, theme, onThemeChange }) {
   const { user, isAuthenticated, logout } = useAuth();
@@ -86,17 +86,6 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
                   >
                     <button
                       onClick={() => {
-                        onNavigate('word-sets');
-                        setShowUserMenu(false);
-                      }}
-                      className="w-full px-4 py-3 text-left flex items-center gap-2 hover:bg-[var(--bg-input)] transition-colors"
-                      style={{ color: 'var(--text-main)' }}
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      Manage Word Sets
-                    </button>
-                    <button
-                      onClick={() => {
                         onNavigate('profile');
                         setShowUserMenu(false);
                       }}
@@ -171,17 +160,6 @@ export function Navbar({ onNavigate, theme, onThemeChange }) {
                       {user?.email}
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      onNavigate('word-sets');
-                      setShowMobileMenu(false);
-                    }}
-                    className="w-full px-3 py-2 text-left flex items-center gap-2 rounded-lg hover:bg-[var(--bg-input)]"
-                    style={{ color: 'var(--text-main)' }}
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    Manage Word Sets
-                  </button>
                   <button
                     onClick={() => {
                       onNavigate('profile');

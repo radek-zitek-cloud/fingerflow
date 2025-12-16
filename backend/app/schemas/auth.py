@@ -59,6 +59,7 @@ class UserResponse(BaseModel):
     email: str
     auth_provider: str
     created_at: int
+    theme: str = "default"
 
     class Config:
         from_attributes = True

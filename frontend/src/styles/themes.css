@@ -25,6 +25,7 @@
 
   /* Status Colors */
   --status-correct: #10b981; /* Emerald 500 */
+  --status-corrected: #f59e0b; /* Amber 500 - corrected after error */
   --status-error: #ef4444; /* Red 500 */
   --status-current: #f59e0b; /* Amber 500 */
 
@@ -64,6 +65,7 @@
 
   /* Status Colors */
   --status-correct: #00ff9f; /* Neon Green */
+  --status-corrected: #ffa500; /* Neon Orange - corrected after error */
   --status-error: #ff0055; /* Neon Red */
   --status-current: #ffff00; /* Neon Yellow */
 
@@ -93,6 +95,7 @@
 
   /* Status Colors */
   --status-correct: #059669; /* Emerald 600 */
+  --status-corrected: #d97706; /* Amber 600 - corrected after error */
   --status-error: #dc2626; /* Red 600 */
   --status-current: #d97706; /* Amber 600 */
 
@@ -122,6 +125,7 @@
 
   /* Status Colors */
   --status-correct: #00ff00;
+  --status-corrected: #ffaa00; /* Orange - corrected after error */
   --status-error: #ff0000;
   --status-current: #ffff00;
 

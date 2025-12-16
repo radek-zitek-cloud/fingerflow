@@ -7,9 +7,9 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useForm, validators } from '../../hooks/useForm';
-import { User, Mail, Lock, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Mail, Lock, Save, CheckCircle, AlertCircle, Home } from 'lucide-react';
 
-export function ProfileSettings() {
+export function ProfileSettings({ onNavigate }) {
   const { user, checkAuth } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [successMessage, setSuccessMessage] = useState(null);
@@ -89,9 +89,19 @@ export function ProfileSettings() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8" style={{ color: 'var(--text-main)' }}>
-        Profile Settings
-      </h1>
+      <div className="flex items-center gap-4 mb-8">
+        <button
+          onClick={() => onNavigate && onNavigate('home')}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors hover:bg-[var(--bg-input)]"
+          style={{ color: 'var(--text-dim)' }}
+        >
+          <Home className="w-5 h-5" />
+          Back to Home
+        </button>
+        <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
+          Profile Settings
+        </h1>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-4 mb-8 border-b" style={{ borderColor: 'var(--key-border)' }}>

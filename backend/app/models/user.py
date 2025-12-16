@@ -33,6 +33,14 @@ class User(Base):
         comment="Unix timestamp in milliseconds"
     )
 
+    # User preferences
+    theme: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="default",
+        comment="UI theme preference: 'default', 'cyberpunk', 'paper', 'high-contrast'"
+    )
+
     # Email verification
     email_verified: Mapped[bool] = mapped_column(
         Boolean,

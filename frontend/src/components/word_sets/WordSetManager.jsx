@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { wordSetsAPI } from '../../services/api';
-import { Plus, Trash2, Edit2, X, Save, FileText } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Save, FileText, Home } from 'lucide-react';
 
-export function WordSetManager() {
+export function WordSetManager({ onNavigate }) {
   const [sets, setSets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -90,7 +90,17 @@ export function WordSetManager() {
   return (
     <div className="max-w-4xl mx-auto p-4">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>Word Sets</h2>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => onNavigate && onNavigate('home')}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors hover:bg-[var(--bg-input)]"
+            style={{ color: 'var(--text-dim)' }}
+          >
+            <Home className="w-5 h-5" />
+            Back to Home
+          </button>
+          <h2 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>Word Sets</h2>
+        </div>
         <button
           onClick={() => {
             setFormData({ id: null, name: '', description: '', wordsText: '' });
