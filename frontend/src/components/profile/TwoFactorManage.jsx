@@ -7,7 +7,6 @@
 import { useState, useEffect } from 'react';
 import { twoFactorAPI } from '../../services/api';
 import TwoFactorSetup from '../auth/TwoFactorSetup';
-import { validate2FACode } from '../../utils/validation';
 
 export default function TwoFactorManage() {
   const [status, setStatus] = useState(null);

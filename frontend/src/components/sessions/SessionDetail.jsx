@@ -14,6 +14,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ErrorAnalysis } from './ErrorAnalysis';
 import { FingerAnalysis } from './FingerAnalysis';
 import { FlightTimeAnalysis } from './FlightTimeAnalysis';
+import DOMPurify from 'dompurify';
 
 export function SessionDetail({ sessionId, onNavigate }) {
   const [session, setSession] = useState(null);
@@ -59,7 +60,11 @@ export function SessionDetail({ sessionId, onNavigate }) {
   const typingHistory = useMemo(() => {
     if (!telemetry || !session || !session.practice_text) return null;
 
-    return reconstructTypingHistory(telemetry.events, session.practice_text);
+    // Sanitize practice_text to prevent XSS attacks
+    // Note: React automatically escapes text content, but this provides defense-in-depth
+    const sanitizedText = sanitizePracticeText(session.practice_text);
+
+    return reconstructTypingHistory(telemetry.events, sanitizedText);
   }, [telemetry, session]);
 
   // Calculate evolution chart data
@@ -623,4 +628,28 @@ function formatDuration(startTime, endTime) {
   const seconds = totalSeconds % 60;
 
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Sanitize practice text to prevent XSS attacks
+ *
+ * Defense-in-depth: While React automatically escapes text content rendered
+ * via {variable} syntax, we explicitly sanitize to prevent any potential
+ * script injection if the text contains HTML/script tags.
+ *
+ * @param {string} text - The practice text from the database
+ * @returns {string} - Sanitized plain text
+ */
+function sanitizePracticeText(text) {
+  if (!text) return '';
+
+  // DOMPurify.sanitize with ALLOWED_TAGS: [] strips ALL HTML tags
+  // This converts '<script>alert("xss")</script>' to 'alert("xss")'
+  const sanitized = DOMPurify.sanitize(text, {
+    ALLOWED_TAGS: [],        // Strip all HTML tags
+    ALLOWED_ATTR: [],        // Strip all attributes
+    KEEP_CONTENT: true,      // Keep text content inside tags
+  });
+
+  return sanitized;
 }

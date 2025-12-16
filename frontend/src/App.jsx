@@ -96,7 +96,6 @@ function App() {
   const [lastKeystrokeTime, setLastKeystrokeTime] = useState(null); // Time of last keystroke
   const [totalKeystrokes, setTotalKeystrokes] = useState(0); // All keystrokes including backspace
   const [totalErrors, setTotalErrors] = useState(0); // Total errors (including corrected ones)
-  const [pressedKeys, setPressedKeys] = useState(new Set()); // Track which keys are currently pressed
 
   // Session configuration
   const [sessionMode, setSessionMode] = useState('wordcount'); // 'timed' or 'wordcount'
@@ -431,8 +430,7 @@ function App() {
       const now = Date.now();
 
       // Track first keystroke time
-      const isFirstKeystroke = !firstKeystrokeTime;
-      if (isFirstKeystroke) {
+      if (!firstKeystrokeTime) {
         setFirstKeystrokeTime(now);
       }
 

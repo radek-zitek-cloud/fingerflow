@@ -499,7 +499,7 @@ function KeyboardView({ keyMetrics, thresholds }) {
 }
 
 // Key button visualization
-function KeyButton({ keyCode, label, metric, width = 1, thresholds }) {
+function KeyButton({ label, metric, width = 1, thresholds }) {
   const speedColor = metric ? getSpeedColor(metric.avg, thresholds.speed) : 'var(--bg-input)';
   const consistencyColor = metric ? getConsistencyColor(metric.stdDev, thresholds.consistency) : 'var(--key-border)';
 
@@ -674,7 +674,7 @@ function getConsistencyColor(stdDev, thresholds) {
 // Get fastest keys sorted by average dwell time
 function getFastestKeys(keyMetrics, limit) {
   return Object.entries(keyMetrics)
-    .filter(([_, metric]) => metric.count >= 3) // Only keys with at least 3 presses
+    .filter(([, metric]) => metric.count >= 3) // Only keys with at least 3 presses
     .sort((a, b) => a[1].avg - b[1].avg)
     .slice(0, limit);
 }
@@ -682,7 +682,7 @@ function getFastestKeys(keyMetrics, limit) {
 // Get slowest keys sorted by average dwell time
 function getSlowestKeys(keyMetrics, limit) {
   return Object.entries(keyMetrics)
-    .filter(([_, metric]) => metric.count >= 3) // Only keys with at least 3 presses
+    .filter(([, metric]) => metric.count >= 3) // Only keys with at least 3 presses
     .sort((a, b) => b[1].avg - a[1].avg)
     .slice(0, limit);
 }

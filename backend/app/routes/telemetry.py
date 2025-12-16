@@ -15,6 +15,53 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def validate_session_access(
+    session_id: int,
+    user_id: int,
+    db: Session,
+    operation: str = "access"
+) -> TypingSession:
+    """
+    Validate that a session exists and belongs to the specified user.
+
+    This is a critical security check that ensures users can only access
+    their own typing sessions and telemetry data.
+
+    Args:
+        session_id: The ID of the session to validate
+        user_id: The ID of the user requesting access
+        db: Database session
+        operation: Description of the operation for logging (e.g., "ingestion", "fetch")
+
+    Returns:
+        TypingSession: The validated session object
+
+    Raises:
+        HTTPException: 404 if session not found or doesn't belong to user
+    """
+    result = db.execute(
+        select(TypingSession).where(
+            TypingSession.id == session_id,
+            TypingSession.user_id == user_id,
+        )
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        logger.warning(
+            f"session_{operation}_failed",
+            session_id=session_id,
+            user_id=user_id,
+            reason="session_not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found or access denied",
+        )
+
+    return session
+
+
 @router.post("/sessions/{session_id}/telemetry", status_code=status.HTTP_200_OK)
 async def ingest_telemetry(
     session_id: int,
@@ -39,25 +86,7 @@ async def ingest_telemetry(
     - On page unload (using navigator.sendBeacon)
     """
     # Validate that session exists and belongs to current user
-    result = db.execute(
-        select(TypingSession).where(
-            TypingSession.id == session_id,
-            TypingSession.user_id == current_user.id,
-        )
-    )
-    session = result.scalar_one_or_none()
-
-    if not session:
-        logger.warning(
-            "telemetry_ingestion_failed",
-            session_id=session_id,
-            user_id=current_user.id,
-            reason="session_not_found",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found or access denied",
-        )
+    session = validate_session_access(session_id, current_user.id, db, "ingestion")
 
     # CRITICAL: Use bulk insert for performance
     # Converting Pydantic models to SQLAlchemy models in a single operation
@@ -115,25 +144,7 @@ async def get_session_telemetry(
     - Use 'limit' parameter for debugging or partial data retrieval
     """
     # Validate that session exists and belongs to current user
-    result = db.execute(
-        select(TypingSession).where(
-            TypingSession.id == session_id,
-            TypingSession.user_id == current_user.id,
-        )
-    )
-    session = result.scalar_one_or_none()
-
-    if not session:
-        logger.warning(
-            "telemetry_fetch_failed",
-            session_id=session_id,
-            user_id=current_user.id,
-            reason="session_not_found",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found or access denied",
-        )
+    session = validate_session_access(session_id, current_user.id, db, "telemetry_fetch")
 
     # Safety limit: Cap at 20,000 events to prevent abuse
     # (enough for ~8 minutes at 100 WPM)
@@ -204,25 +215,7 @@ async def get_detailed_telemetry(
     - For complete dwell time analysis, both DOWN and UP events are required
     """
     # Validate that session exists and belongs to current user
-    result = db.execute(
-        select(TypingSession).where(
-            TypingSession.id == session_id,
-            TypingSession.user_id == current_user.id,
-        )
-    )
-    session = result.scalar_one_or_none()
-
-    if not session:
-        logger.warning(
-            "detailed_telemetry_fetch_failed",
-            session_id=session_id,
-            user_id=current_user.id,
-            reason="session_not_found",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found or access denied",
-        )
+    session = validate_session_access(session_id, current_user.id, db, "detailed_telemetry_fetch")
 
     # Safety limit: Cap at 40,000 events to prevent abuse
     # (enough for ~8 minutes at 100 WPM with DOWN+UP events)

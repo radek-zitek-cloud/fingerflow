@@ -480,7 +480,7 @@ function KeyboardView({ keyMetrics, thresholds, totalErrors }) {
 }
 
 // Key button visualization
-function KeyButton({ keyCode, label, errorCount, width = 1, thresholds }) {
+function KeyButton({ label, errorCount, width = 1, thresholds }) {
   const color = getErrorColor(errorCount, thresholds);
 
   // Base unit is 50px, multiply by width factor
