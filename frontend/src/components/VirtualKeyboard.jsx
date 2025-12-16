@@ -7,8 +7,6 @@
  * - Key press animation
  */
 
-import { useMemo } from 'react';
-
 // Full ANSI Keyboard Layout
 const KEYBOARD_ROWS = [
   // Row 1
