@@ -90,11 +90,13 @@ class TelemetryEvent(Base):
 
     # Indexes optimized for analytics queries
     # - session_id for filtering by session
-    # - session_id + timestamp_offset for time-series queries (dwell, flight, transition time)
+    # - (session_id, event_type) for filtering DOWN-only or UP-only events
+    # - (session_id, timestamp_offset) for time-series queries (dwell, flight, transition time)
     # - key_code for per-key analytics
     # - finger_used for per-finger analytics
     __table_args__ = (
         Index("idx_telemetry_session_id", "session_id"),
+        Index("idx_telemetry_session_event_type", "session_id", "event_type"),
         Index("idx_telemetry_session_timestamp", "session_id", "timestamp_offset"),
         Index("idx_telemetry_key_code", "key_code"),
         Index("idx_telemetry_finger_used", "finger_used"),

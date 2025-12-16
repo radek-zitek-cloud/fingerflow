@@ -103,11 +103,35 @@ export function useTelemetry(sessionId, sessionStartTime) {
 
   /**
    * Add event to buffer and check if flush is needed
+   * @param {string} eventType - 'DOWN' or 'UP'
+   * @param {string} keyCode - KeyboardEvent.code
+   * @param {boolean} isError - Whether this keystroke was incorrect
+   * @param {number} timestamp - Optional explicit timestamp (defaults to Date.now())
    */
-  const addEvent = useCallback((eventType, keyCode, isError = false) => {
+  const addEvent = useCallback((eventType, keyCode, isError = false, timestamp = null) => {
     if (!sessionId) return;
 
-    const timestampOffset = Date.now() - sessionStartRef.current;
+    const eventTime = timestamp || Date.now();
+
+    // Use sessionStartTime prop as fallback if sessionStartRef hasn't been set yet
+    // This prevents NaN on the first keystroke when ref might not be updated
+    const sessionStart = sessionStartRef.current || sessionStartTime;
+    const timestampOffset = eventTime - sessionStart;
+
+    // Validate timestamp offset to prevent NaN values
+    if (!Number.isFinite(timestampOffset)) {
+      console.error('Invalid timestamp offset calculation', {
+        eventType,
+        keyCode,
+        eventTime,
+        sessionStart,
+        sessionStartRef: sessionStartRef.current,
+        sessionStartTime,
+        timestampOffset,
+      });
+      return; // Don't add invalid events to buffer
+    }
+
     const fingerUsed = mapKeyToFinger(keyCode);
 
     const event = {
@@ -134,7 +158,7 @@ export function useTelemetry(sessionId, sessionStartTime) {
         flush();
       }, TIME_THRESHOLD_MS);
     }
-  }, [sessionId, flush]);
+  }, [sessionId, sessionStartTime, flush]);
 
   /**
    * NOTE: Event listeners are NOT set up here anymore.

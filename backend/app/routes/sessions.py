@@ -128,6 +128,22 @@ async def end_session(
         )
 
     # Update session with final metrics
+    # Only update start_time if it wasn't set during session creation
+    # (backward compatibility for old sessions)
+    # Trust the database value as the single source of truth
+    if session.start_time is None:
+        session.start_time = session_end.start_time
+    elif session.start_time != session_end.start_time:
+        # Log warning if frontend sends different start_time
+        logger.warning(
+            "start_time_mismatch",
+            session_id=session.id,
+            user_id=current_user.id,
+            db_start_time=session.start_time,
+            frontend_start_time=session_end.start_time,
+            delta_ms=abs(session.start_time - session_end.start_time),
+        )
+
     session.end_time = session_end.end_time
     session.wpm = session_end.wpm
     session.mechanical_wpm = session_end.mechanical_wpm
@@ -136,6 +152,7 @@ async def end_session(
     session.correct_characters = session_end.correct_characters
     session.incorrect_characters = session_end.incorrect_characters
     session.total_keystrokes = session_end.total_keystrokes
+    session.practice_text = session_end.practice_text
 
     db.commit()
     db.refresh(session)
