@@ -15,6 +15,7 @@ import { RollingWindow } from './components/RollingWindow';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { SessionHistory } from './components/sessions/SessionHistory';
 import { SessionDetail } from './components/sessions/SessionDetail';
+import { MultiSessionAnalysis } from './components/sessions/MultiSessionAnalysis';
 import { SessionProgressChart } from './components/sessions/SessionProgressChart';
 import { TypingStatistics } from './components/sessions/TypingStatistics';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -344,6 +345,11 @@ function App() {
     setCurrentPage('session-detail');
   };
 
+  // Navigate to multi-session analysis page
+  const handleNavigateToMultiSession = () => {
+    setCurrentPage('multi-session-analysis');
+  };
+
   // Calculate WPM and accuracy (for display during typing)
   const calculateStats = () => {
     const correctCount = Object.values(characterStates).filter(s => s === 'correct' || s === 'corrected').length;
@@ -666,6 +672,13 @@ function App() {
         <SessionDetail sessionId={selectedSessionId} onNavigate={setCurrentPage} />
       )}
 
+      {/* Multi-Session Analysis Page */}
+      {currentPage === 'multi-session-analysis' && isAuthenticated && (
+        <main className="flex-1 container mx-auto p-4 md:p-8 relative z-10">
+          <MultiSessionAnalysis onBack={() => setCurrentPage('home')} />
+        </main>
+      )}
+
       {/* Home Page / Typing Test */}
       {currentPage === 'home' && (
         <main className="flex-1 container mx-auto p-4 md:p-8 relative z-10">
@@ -930,7 +943,10 @@ function App() {
                 <div className="mt-16 space-y-16">
                   <SessionProgressChart />
                   <TypingStatistics />
-                  <SessionHistory onNavigateToDetail={handleNavigateToSessionDetail} />
+                  <SessionHistory
+                    onNavigateToDetail={handleNavigateToSessionDetail}
+                    onNavigateToMultiSession={handleNavigateToMultiSession}
+                  />
                 </div>
               )}
 

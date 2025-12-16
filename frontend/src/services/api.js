@@ -49,6 +49,11 @@ async function fetchWithAuth(url, options = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    // Handle FastAPI validation errors (array of errors)
+    if (error.detail && Array.isArray(error.detail)) {
+      const errorMessages = error.detail.map(e => `${e.loc.join('.')}: ${e.msg}`).join(', ');
+      throw new Error(errorMessages);
+    }
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
@@ -199,6 +204,14 @@ export const sessionsAPI = {
 
   async getDetailedTelemetry(sessionId) {
     return fetchWithAuth(`/api/sessions/${sessionId}/telemetry/detailed`);
+  },
+
+  async getByDateRange(startDate, endDate) {
+    return fetchWithAuth(`/api/sessions/range?start_date=${startDate}&end_date=${endDate}`);
+  },
+
+  async getCombinedTelemetry(startDate, endDate) {
+    return fetchWithAuth(`/api/sessions/range/telemetry?start_date=${startDate}&end_date=${endDate}`);
   },
 };
 

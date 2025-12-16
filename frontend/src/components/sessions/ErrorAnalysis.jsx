@@ -13,14 +13,22 @@ import { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../../services/api';
 import { Hand, Keyboard, AlertTriangle, CheckCircle } from 'lucide-react';
 
-export function ErrorAnalysis({ sessionId }) {
+export function ErrorAnalysis({ sessionId, events }) {
   const [detailedTelemetry, setDetailedTelemetry] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('fingers'); // 'fingers' or 'keyboard'
 
-  // Load detailed telemetry data
+  // Load detailed telemetry data (only if events not provided directly)
   useEffect(() => {
+    // If events are provided directly, use them
+    if (events) {
+      setDetailedTelemetry({ events });
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise, fetch from API using sessionId
     const loadDetailedTelemetry = async () => {
       try {
         setLoading(true);
@@ -43,8 +51,10 @@ export function ErrorAnalysis({ sessionId }) {
       }
     };
 
-    loadDetailedTelemetry();
-  }, [sessionId]);
+    if (sessionId) {
+      loadDetailedTelemetry();
+    }
+  }, [sessionId, events]);
 
   // Calculate error metrics and thresholds
   const { metrics, thresholds } = useMemo(() => {

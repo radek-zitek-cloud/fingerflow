@@ -62,6 +62,98 @@ def validate_session_access(
     return session
 
 
+@router.get("/sessions/range/telemetry")
+async def get_combined_telemetry(
+    start_date: int,
+    end_date: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get combined telemetry data from all sessions within a date range.
+
+    This endpoint fetches telemetry events from all completed sessions
+    within the specified date range for multi-session analysis.
+
+    Args:
+        start_date: Unix timestamp in milliseconds (inclusive)
+        end_date: Unix timestamp in milliseconds (inclusive)
+
+    Returns:
+        Combined telemetry events from all sessions in range
+    """
+    from fastapi import HTTPException, status
+
+    # Validate date range
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be before or equal to end_date"
+        )
+
+    # First, get all session IDs in the date range for this user
+    session_result = db.execute(
+        select(TypingSession.id)
+        .where(
+            TypingSession.user_id == current_user.id,
+            TypingSession.start_time >= start_date,
+            TypingSession.start_time <= end_date,
+            TypingSession.end_time.isnot(None)  # Only completed sessions
+        )
+    )
+    session_ids = [row[0] for row in session_result.all()]
+
+    if not session_ids:
+        logger.info(
+            "combined_telemetry_no_sessions",
+            user_id=current_user.id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return {
+            "session_count": 0,
+            "events": [],
+            "total_events": 0,
+        }
+
+    # Fetch all telemetry events for these sessions
+    # Note: This could be a large dataset for many sessions
+    query = (
+        select(TelemetryEvent)
+        .where(TelemetryEvent.session_id.in_(session_ids))
+        .order_by(TelemetryEvent.session_id, TelemetryEvent.timestamp_offset)
+    )
+
+    result = db.execute(query)
+    events = result.scalars().all()
+
+    logger.info(
+        "combined_telemetry_fetched",
+        user_id=current_user.id,
+        start_date=start_date,
+        end_date=end_date,
+        session_count=len(session_ids),
+        event_count=len(events),
+    )
+
+    return {
+        "session_count": len(session_ids),
+        "session_ids": session_ids,
+        "events": [
+            {
+                "session_id": event.session_id,
+                "event_type": event.event_type.value,
+                "key_code": event.key_code,
+                "timestamp_offset": event.timestamp_offset,
+                "finger_used": event.finger_used.value,
+                "is_error": event.is_error,
+            }
+            for event in events
+        ],
+        "total_events": len(events),
+    }
+
+
 @router.post("/sessions/{session_id}/telemetry", status_code=status.HTTP_200_OK)
 async def ingest_telemetry(
     session_id: int,

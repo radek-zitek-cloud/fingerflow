@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { sessionsAPI } from '../../services/api';
 import { Clock, Target, TrendingUp, Calendar, ChevronLeft, ChevronRight, Trash2, Eye } from 'lucide-react';
 
-export function SessionHistory({ onNavigateToDetail }) {
+export function SessionHistory({ onNavigateToDetail, onNavigateToMultiSession }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -105,9 +105,24 @@ export function SessionHistory({ onNavigateToDetail }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text-main)' }}>
-        Session History
-      </h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold" style={{ color: 'var(--text-main)' }}>
+          Session History
+        </h2>
+        {onNavigateToMultiSession && (
+          <button
+            onClick={onNavigateToMultiSession}
+            className="px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2"
+            style={{
+              backgroundColor: 'var(--accent-primary)',
+              color: 'white',
+            }}
+          >
+            <TrendingUp className="w-4 h-4" />
+            Multi-Session Analysis
+          </button>
+        )}
+      </div>
 
       {/* Desktop Table View */}
       <div className="hidden md:block glass-panel rounded-xl overflow-hidden">

@@ -48,6 +48,54 @@ async def create_session(
     return new_session
 
 
+@router.get("/range", response_model=List[SessionResponse])
+async def get_sessions_by_date_range(
+    start_date: int,
+    end_date: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all typing sessions for the current user within a date range.
+
+    Args:
+        start_date: Unix timestamp in milliseconds (inclusive)
+        end_date: Unix timestamp in milliseconds (inclusive)
+
+    Returns:
+        List of sessions within the date range, ordered by start_time descending
+    """
+    # Validate date range
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be before or equal to end_date"
+        )
+
+    # Query sessions within the date range
+    result = db.execute(
+        select(TypingSession)
+        .where(
+            TypingSession.user_id == current_user.id,
+            TypingSession.start_time >= start_date,
+            TypingSession.start_time <= end_date,
+            TypingSession.end_time.isnot(None)  # Only completed sessions
+        )
+        .order_by(TypingSession.start_time.desc())
+    )
+    sessions = result.scalars().all()
+
+    logger.info(
+        "sessions_fetched_by_range",
+        user_id=current_user.id,
+        start_date=start_date,
+        end_date=end_date,
+        session_count=len(sessions),
+    )
+
+    return sessions
+
+
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: int,
