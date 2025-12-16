@@ -20,6 +20,97 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. All database writes must use bulk insert operations for performance
 4. CSS Variable-driven theming (never use Tailwind for colors)
 
+## Environment Configuration
+
+### Overview
+
+The project uses environment variables for configuration. Each component has its own `.env` file:
+
+```
+fingerflow/
+├── backend/.env          # Backend configuration (git-ignored)
+├── backend/.env.example  # Backend template with documentation
+├── frontend/.env         # Frontend configuration (git-ignored)
+└── frontend/.env.example # Frontend template
+```
+
+### Quick Setup
+
+**For Docker Development (Recommended):**
+
+```bash
+# 1. Backend environment
+cp backend/.env.example backend/.env
+# Edit backend/.env if you need custom settings (defaults work for Docker)
+
+# 2. Frontend environment
+cp frontend/.env.example frontend/.env
+# Frontend .env has correct defaults, no changes needed
+
+# 3. Start services
+./scripts/start.sh --dev
+```
+
+**For Local Development (Without Docker):**
+
+```bash
+# 1. Set up PostgreSQL locally
+createdb -U postgres fingerflow
+
+# 2. Configure backend
+cp backend/.env.example backend/.env
+# Edit backend/.env:
+#   DATABASE_URL=postgresql://postgres:password@localhost:5432/fingerflow
+
+# 3. Configure frontend
+cp frontend/.env.example frontend/.env
+# Defaults are correct for local dev
+
+# 4. Run services
+cd backend && source .venv/bin/activate && uvicorn main:app --reload
+cd frontend && npm run dev
+```
+
+### Backend Environment Variables
+
+**Required:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `SECRET_KEY` - JWT signing key (generate with `openssl rand -hex 32`)
+
+**Optional but Recommended:**
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - For Google OAuth login
+- `CORS_ORIGINS` - Allowed frontend origins (comma-separated)
+- `LOG_LEVEL` - DEBUG, INFO, WARNING, ERROR, or CRITICAL
+
+**Email Configuration (Optional):**
+- `EMAIL_PROVIDER` - `console` (dev), `smtp`, or `sendgrid`
+- For SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+- For SendGrid: `SENDGRID_API_KEY`
+
+**See `backend/.env.example` for complete documentation.**
+
+### Frontend Environment Variables
+
+**Required:**
+- `VITE_API_URL` - Backend API URL (default: `http://localhost:8000`)
+
+**That's it!** Frontend has minimal configuration.
+
+### Docker Compose Environment
+
+Docker Compose uses `docker-compose.dev.yml` to override environment variables for development:
+
+- `DATABASE_URL` is automatically set to use the `postgres` container
+- `CORS_ORIGINS` includes `http://localhost:5173` for Vite dev server
+- Other settings can be overridden in `.env` files if needed
+
+### Security Notes
+
+1. **Never commit `.env` files** - they contain secrets (already in `.gitignore`)
+2. **Generate unique `SECRET_KEY`** for production: `openssl rand -hex 32`
+3. **Use strong database passwords** in production
+4. **Don't use default passwords** (`fingerflow_dev_password` is only for local dev)
+
 ## Database Schema
 
 ### User
