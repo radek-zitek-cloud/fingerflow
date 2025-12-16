@@ -186,6 +186,12 @@ export const sessionsAPI = {
       body: JSON.stringify(sessionEndData),
     });
   },
+
+  async delete(sessionId) {
+    return fetchWithAuth(`/api/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 /**

@@ -54,6 +54,11 @@ export function useTelemetry(sessionId, sessionStartTime) {
   const flushTimerRef = useRef(null);
   const sessionStartRef = useRef(sessionStartTime);
 
+  // Update sessionStartRef when sessionStartTime prop changes
+  useEffect(() => {
+    sessionStartRef.current = sessionStartTime;
+  }, [sessionStartTime]);
+
   /**
    * Flush buffered events to the backend
    */
@@ -132,32 +137,13 @@ export function useTelemetry(sessionId, sessionStartTime) {
   }, [sessionId, flush]);
 
   /**
-   * Setup event listeners for keydown/keyup
+   * NOTE: Event listeners are NOT set up here anymore.
+   * The parent component (App.jsx) is responsible for calling addEvent
+   * with the correct is_error flag based on typing context.
+   *
+   * This allows the telemetry system to know whether each keystroke
+   * was correct or incorrect.
    */
-  useEffect(() => {
-    if (!sessionId) return;
-
-    const handleKeyDown = (e) => {
-      // Don't capture browser shortcuts or non-character keys
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-      addEvent('DOWN', e.code);
-    };
-
-    const handleKeyUp = (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-      addEvent('UP', e.code);
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [sessionId, addEvent]);
 
   /**
    * Flush on component unmount or page unload

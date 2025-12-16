@@ -72,9 +72,11 @@ function App() {
   const [firstKeystrokeTime, setFirstKeystrokeTime] = useState(null); // Time of first keystroke
   const [lastKeystrokeTime, setLastKeystrokeTime] = useState(null); // Time of last keystroke
   const [totalKeystrokes, setTotalKeystrokes] = useState(0); // All keystrokes including backspace
+  const [totalErrors, setTotalErrors] = useState(0); // Total errors (including corrected ones)
+  const [pressedKeys, setPressedKeys] = useState(new Set()); // Track which keys are currently pressed
 
   // Initialize telemetry
-  const { addEvent } = useTelemetry(sessionId, sessionStartTime);
+  const { addEvent, flush } = useTelemetry(sessionId, sessionStartTime);
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -154,10 +156,16 @@ function App() {
     setFirstKeystrokeTime(null);
     setLastKeystrokeTime(null);
     setTotalKeystrokes(0);
+    setTotalErrors(0);
   };
 
-  // End session
-  const endSession = async () => {
+  // Save session (end with data persisted)
+  const saveSession = async () => {
+    // Flush any remaining telemetry events
+    if (sessionId) {
+      await flush();
+    }
+
     // Send final stats to backend if authenticated
     if (isAuthenticated && sessionId && firstKeystrokeTime && lastKeystrokeTime) {
       try {
@@ -173,7 +181,7 @@ function App() {
           total_keystrokes: totalKeystrokes,
         });
       } catch (error) {
-        console.error('Failed to end session:', error);
+        console.error('Failed to save session:', error);
       }
     }
 
@@ -186,14 +194,38 @@ function App() {
     setFirstKeystrokeTime(null);
     setLastKeystrokeTime(null);
     setTotalKeystrokes(0);
+    setTotalErrors(0);
+  };
+
+  // Abort session (delete without saving)
+  const abortSession = async () => {
+    // Delete session from backend if authenticated
+    if (isAuthenticated && sessionId) {
+      try {
+        await sessionsAPI.delete(sessionId);
+      } catch (error) {
+        console.error('Failed to abort session:', error);
+      }
+    }
+
+    // Reset state (same as save, but without persisting stats)
+    setSessionId(null);
+    setSessionStartTime(null);
+    setCurrentIndex(0);
+    setCharacterStates({});
+    setStartTime(null);
+    setFirstKeystrokeTime(null);
+    setLastKeystrokeTime(null);
+    setTotalKeystrokes(0);
+    setTotalErrors(0);
   };
 
   // Calculate WPM and accuracy (for display during typing)
   const calculateStats = () => {
     const correctCount = Object.values(characterStates).filter(s => s === 'correct').length;
-    const errorCount = Object.values(characterStates).filter(s => s === 'error').length;
-    const totalTyped = correctCount + errorCount;
-    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 0;
+    // Use totalErrors to include corrected mistakes in accuracy calculation
+    const totalTyped = correctCount + totalErrors;
+    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 100;
 
     // Use time from first to current keystroke
     const elapsedMinutes = firstKeystrokeTime ? (Date.now() - firstKeystrokeTime) / 60000 : 0;
@@ -209,16 +241,16 @@ function App() {
       mechanicalWPM: Math.round(mechanicalWPM),
       accuracy: Math.round(accuracy),
       correctCount,
-      errorCount
+      errorCount: totalErrors
     };
   };
 
   // Calculate final stats (for session end)
   const calculateFinalStats = () => {
     const correctCount = Object.values(characterStates).filter(s => s === 'correct').length;
-    const errorCount = Object.values(characterStates).filter(s => s === 'error').length;
-    const totalTyped = correctCount + errorCount;
-    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 0;
+    // Use totalErrors to include corrected mistakes
+    const totalTyped = correctCount + totalErrors;
+    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 100;
 
     // Use time from first to last keystroke
     const elapsedMinutes = (firstKeystrokeTime && lastKeystrokeTime)
@@ -236,14 +268,17 @@ function App() {
       mechanicalWPM,
       accuracy,
       correctCount,
-      errorCount,
+      errorCount: totalErrors,
     };
   };
 
   // Handle typing
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (!startTime || !practiceText || currentIndex >= practiceText.length) return;
+    const handleKeyDown = (e) => {
+      if (!startTime || !practiceText) return;
+
+      // Don't capture browser shortcuts or modifier-only keys
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const now = Date.now();
 
@@ -255,8 +290,36 @@ function App() {
       // Track last keystroke time
       setLastKeystrokeTime(now);
 
-      // Increment total keystrokes
-      setTotalKeystrokes(prev => prev + 1);
+      // Handle backspace for corrections
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+
+        // Increment total keystrokes (backspace counts as a keystroke)
+        setTotalKeystrokes(prev => prev + 1);
+
+        // Send telemetry for backspace DOWN event (not an error)
+        if (sessionId) {
+          addEvent('DOWN', e.code, false);
+        }
+
+        // Allow going back if not at start
+        if (currentIndex > 0) {
+          setCurrentIndex(prev => prev - 1);
+          // Clear the state of the previous character (allows correction)
+          setCharacterStates(prev => {
+            const newStates = { ...prev };
+            delete newStates[currentIndex - 1];
+            return newStates;
+          });
+        }
+        return;
+      }
+
+      // Only process character keys for typing
+      if (e.key.length !== 1 || currentIndex >= practiceText.length) return;
+
+      // Prevent default to avoid double input
+      e.preventDefault();
 
       // Get the expected character
       const expectedChar = practiceText[currentIndex];
@@ -269,6 +332,19 @@ function App() {
       // Check if correct
       const isCorrect = typedChar === expectedChar;
 
+      // Increment total keystrokes
+      setTotalKeystrokes(prev => prev + 1);
+
+      // Track errors (including ones that will be corrected)
+      if (!isCorrect) {
+        setTotalErrors(prev => prev + 1);
+      }
+
+      // Send telemetry for keydown event with error flag
+      if (sessionId) {
+        addEvent('DOWN', e.code, !isCorrect);
+      }
+
       // Update character state
       setCharacterStates(prev => ({
         ...prev,
@@ -279,50 +355,27 @@ function App() {
       if (isCorrect) {
         setCurrentIndex(prev => prev + 1);
       }
-
-      // Telemetry is automatically handled by useTelemetry hook
     };
 
-    // Handle backspace for corrections
-    const handleKeyDown = (e) => {
+    const handleKeyUp = (e) => {
       if (!startTime || !practiceText) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      const now = Date.now();
-
-      // Track backspace as a keystroke
-      if (e.key === 'Backspace') {
-        // Track first keystroke if this is the first key
-        if (!firstKeystrokeTime) {
-          setFirstKeystrokeTime(now);
-        }
-
-        // Track last keystroke time
-        setLastKeystrokeTime(now);
-
-        // Increment total keystrokes (backspace counts as a keystroke)
-        setTotalKeystrokes(prev => prev + 1);
-
-        // Allow going back if not at start
-        if (currentIndex > 0) {
-          e.preventDefault();
-          setCurrentIndex(prev => prev - 1);
-          // Clear the state of the previous character
-          setCharacterStates(prev => {
-            const newStates = { ...prev };
-            delete newStates[currentIndex - 1];
-            return newStates;
-          });
-        }
+      // Send telemetry for keyup event
+      // For error tracking, we check if the current position has an error state
+      if (sessionId && (e.key.length === 1 || e.key === 'Backspace')) {
+        const isError = characterStates[currentIndex] === 'error' || characterStates[currentIndex - 1] === 'error';
+        addEvent('UP', e.code, isError);
       }
     };
 
-    window.addEventListener('keypress', handleKeyPress);
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
-      window.removeEventListener('keypress', handleKeyPress);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [startTime, currentIndex, practiceText, firstKeystrokeTime]);
+  }, [startTime, currentIndex, practiceText, firstKeystrokeTime, sessionId, addEvent, characterStates]);
 
   // Check if test is complete
   const isComplete = practiceText && currentIndex >= practiceText.length;
@@ -554,7 +607,7 @@ function App() {
               {/* End Test Button */}
               <div className="text-center">
                 <button
-                  onClick={endSession}
+                  onClick={abortSession}
                   className="px-8 py-2.5 rounded-lg border hover:bg-[var(--bg-input)] transition-colors font-medium text-sm tracking-wide"
                   style={{
                     borderColor: 'var(--key-border)',
@@ -622,14 +675,24 @@ function App() {
               {/* Action Buttons */}
               <div className="flex gap-4 justify-center">
                 <button
-                  onClick={endSession}
+                  onClick={saveSession}
                   className="px-10 py-4 rounded-xl font-bold text-lg transition-all hover:scale-105 shadow-[var(--shadow-glow)]"
                   style={{
                     backgroundColor: 'var(--accent-primary)',
                     color: 'white',
                   }}
                 >
-                  Start New Session
+                  {isAuthenticated ? 'Save Session' : 'Start New Session'}
+                </button>
+                <button
+                  onClick={abortSession}
+                  className="px-10 py-4 rounded-xl font-bold text-lg border-2 transition-all hover:bg-[var(--status-error)] hover:text-white"
+                  style={{
+                    borderColor: 'var(--status-error)',
+                    color: 'var(--status-error)',
+                  }}
+                >
+                  Abort Session
                 </button>
                 {!isAuthenticated && (
                   <button
@@ -640,7 +703,7 @@ function App() {
                       color: 'var(--accent-primary)',
                     }}
                   >
-                    Save & Analyze
+                    Login to Save
                   </button>
                 )}
               </div>

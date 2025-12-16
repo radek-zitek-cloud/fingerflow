@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.database import init_db
+from app.database import run_migrations
 from app.logging_config import configure_logging, get_logger
 
 # Configure structured logging
@@ -32,8 +32,8 @@ async def lifespan(app: FastAPI):
     logger.info("application_startup", message="Initializing FingerFlow backend")
     # Avoid touching real local DB during tests (prevents sqlite file locks and keeps tests hermetic).
     if "pytest" not in sys.modules:
-        init_db()
-    logger.info("database_initialized", message="Database tables created/verified")
+        run_migrations()
+    logger.info("database_migrations_complete", message="Database schema up to date")
 
     yield
 

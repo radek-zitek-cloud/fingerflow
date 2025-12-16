@@ -151,3 +151,37 @@ async def end_session(
     )
 
     return session
+
+
+@router.delete("/{session_id}")
+def delete_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Delete a typing session (abort session).
+
+    This endpoint deletes a session and all associated telemetry data.
+    Useful for aborting incomplete or invalid sessions.
+    """
+    # Get the session
+    session = db.query(TypingSession).filter(
+        TypingSession.id == session_id,
+        TypingSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    logger.info(
+        "session_deleted",
+        session_id=session.id,
+        user_id=current_user.id,
+    )
+
+    # Delete the session (CASCADE will delete associated telemetry events)
+    db.delete(session)
+    db.commit()
+
+    return {"message": "Session deleted successfully"}

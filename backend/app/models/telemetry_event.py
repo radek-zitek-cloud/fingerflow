@@ -66,7 +66,7 @@ class TelemetryEvent(Base):
         comment="JavaScript KeyboardEvent.code (e.g., 'KeyA', 'Space', 'Enter')"
     )
     timestamp_offset: Mapped[int] = mapped_column(
-        Integer,
+        BigInteger,
         nullable=False,
         comment="Milliseconds elapsed since session start_time"
     )
