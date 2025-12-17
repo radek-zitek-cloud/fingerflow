@@ -32,8 +32,32 @@ async def lifespan(app: FastAPI):
     logger.info("application_startup", message="Initializing FingerFlow backend")
     # Avoid touching real local DB during tests (prevents sqlite file locks and keeps tests hermetic).
     if "pytest" not in sys.modules:
-        run_migrations()
-    logger.info("database_migrations_complete", message="Database schema up to date")
+        # Use file lock to ensure only one worker runs migrations
+        import fcntl
+        lock_file_path = "/tmp/fingerflow_migration.lock"
+        lock_file = None
+        try:
+            lock_file = open(lock_file_path, "w")
+            # Non-blocking lock - if another worker has it, skip
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            logger.info("migration_lock_acquired", message="Running database migrations")
+            run_migrations()
+            logger.info("database_migrations_complete", message="Database schema up to date")
+        except BlockingIOError:
+            # Another worker is running migrations, skip
+            logger.info("migration_lock_skip", message="Another worker is running migrations, skipping")
+        except Exception as e:
+            logger.error("migration_error", error=str(e))
+            raise
+        finally:
+            if lock_file:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    lock_file.close()
+                except Exception:
+                    pass
+    else:
+        logger.info("test_mode", message="Skipping migrations in test mode")
 
     yield
 
