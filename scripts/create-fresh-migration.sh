@@ -17,12 +17,14 @@ echo "Removing old migration files..."
 sudo rm -f backend/alembic/versions/*.py
 sudo rm -rf backend/alembic/versions/__pycache__
 
-# 2. Drop and recreate database
-echo "Recreating database..."
-docker exec fingerflow-postgres psql -U postgres -c "DROP DATABASE IF EXISTS fingerflow;"
-docker exec fingerflow-postgres psql -U postgres -c "CREATE DATABASE fingerflow;"
-docker exec fingerflow-postgres psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE fingerflow TO fingerflow;"
-docker exec fingerflow-postgres psql -U fingerflow -d fingerflow -c "GRANT ALL ON SCHEMA public TO fingerflow;"
+# 2. Drop all tables (can't drop database while connected, so drop schema instead)
+echo "Dropping all tables..."
+docker exec fingerflow-postgres psql -U fingerflow -d fingerflow << 'EOF'
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO fingerflow;
+GRANT ALL ON SCHEMA public TO public;
+EOF
 
 # 3. Generate fresh migration in container
 echo "Generating migration..."
