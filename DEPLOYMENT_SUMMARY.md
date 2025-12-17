@@ -145,12 +145,17 @@ Production deployment infrastructure for FingerFlow on `fingerflow.zitek.cloud` 
    - `fingerflow-network` (internal): Backend ↔ PostgreSQL
    - PostgreSQL never exposed to Traefik (security)
 
-3. **HTTPS Handling**
+3. **No Direct Port Exposure**
+   - Frontend and backend use `ports: []` in production
+   - Traefik routes to containers internally via Docker networks
+   - Only Traefik exposes ports 80/443 to the host
+
+4. **HTTPS Handling**
    - Traefik handles TLS termination (Let's Encrypt)
    - Backend `HTTPS_REDIRECT_ENABLED=false` (Traefik does this)
    - Security headers set by both backend and Traefik
 
-4. **Zero Downtime**
+5. **Zero Downtime**
    - Health checks ensure services are ready before routing
    - Database migrations run automatically on startup
    - Backup before every deployment

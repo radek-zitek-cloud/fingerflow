@@ -95,6 +95,7 @@ docker network create proxy
 - **`proxy` network**: External network managed by Traefik (connects frontend, backend)
 - **`fingerflow-network`**: Internal bridge network (connects backend, postgres)
 - **PostgreSQL**: Not exposed to Traefik, only accessible internally
+- **No Port Mappings**: Frontend and backend don't expose ports to host - Traefik routes internally
 
 ### Routing Strategy
 
@@ -137,7 +138,7 @@ nano .env
 **Required secrets to generate:**
 
 ```bash
-# Generate SECRET_KEY
+# Generate SECRET_KEY 
 openssl rand -hex 32
 
 # Generate POSTGRES_PASSWORD
@@ -433,6 +434,23 @@ curl https://fingerflow.zitek.cloud/health
 ---
 
 ## Troubleshooting
+
+### Port Already Allocated Error
+
+**Symptoms:** "Bind for 0.0.0.0:80 failed: port is already allocated"
+
+**Cause:** The base `docker-compose.yml` exposes ports, but production should not.
+
+**Solution:** This is already fixed in `docker-compose.prod.yml` with `ports: []`. Make sure you're using:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Not just:
+```bash
+docker compose up -d  # ❌ Wrong - exposes ports!
+```
 
 ### Backend Won't Start
 

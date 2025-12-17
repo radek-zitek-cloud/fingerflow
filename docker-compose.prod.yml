@@ -21,12 +21,14 @@ services:
     restart: unless-stopped
 
   backend:
-    # FastAPI Backend - Exposed via Traefik
+    # FastAPI Backend - Exposed via Traefik (no direct port mapping)
     image: fingerflow-backend:prod
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: fingerflow-backend
+    # Remove port mapping - Traefik routes internally
+    ports: []
     env_file:
       - .env
     environment:
@@ -78,7 +80,7 @@ services:
       start_period: 40s
 
   frontend:
-    # React Frontend - Served via nginx, exposed via Traefik
+    # React Frontend - Served via nginx, exposed via Traefik (no direct port mapping)
     image: fingerflow-frontend:prod
     build:
       context: ./frontend
@@ -86,6 +88,8 @@ services:
       args:
         - VITE_API_URL=https://${DOMAIN:-fingerflow.zitek.cloud}
     container_name: fingerflow-frontend
+    # Remove port mapping - Traefik routes internally
+    ports: []
     depends_on:
       - backend
     networks:
