@@ -68,7 +68,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.fingerflow-api.rule=Host(`${DOMAIN:-fingerflow.zitek.cloud}`) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`) || Path(`/`))"
+      - "traefik.http.routers.fingerflow-api.rule=Host(`${DOMAIN:-fingerflow.zitek.cloud}`) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`))"
       - "traefik.http.routers.fingerflow-api.priority=10"
       - "traefik.http.routers.fingerflow-api.entrypoints=websecure"
       - "traefik.http.routers.fingerflow-api.tls.certresolver=lehttp"
