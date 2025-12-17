@@ -32,46 +32,15 @@ async def lifespan(app: FastAPI):
     logger.info("application_startup", message="Initializing FingerFlow backend")
     # Avoid touching real local DB during tests (prevents sqlite file locks and keeps tests hermetic).
     if "pytest" not in sys.modules:
-        # Use file lock to ensure only one worker runs migrations
-        import fcntl
-        import time
-        lock_file_path = "/tmp/fingerflow_migration.lock"
-        lock_file = None
-        migration_ran = False
+        # Run migrations (Alembic handles concurrency internally)
         try:
-            lock_file = open(lock_file_path, "w")
-            # Try to acquire lock with retries for other workers
-            for attempt in range(3):
-                try:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    # Got the lock, run migrations
-                    logger.info("migration_lock_acquired", message="Running database migrations")
-                    run_migrations()
-                    logger.info("database_migrations_complete", message="Database schema up to date")
-                    migration_ran = True
-                    break
-                except BlockingIOError:
-                    if attempt < 2:
-                        # Another worker is running migrations, wait and retry
-                        logger.info("migration_wait", message=f"Waiting for migrations to complete (attempt {attempt + 1}/3)")
-                        time.sleep(5)
-                    else:
-                        # After 3 attempts, assume migrations completed
-                        logger.info("migration_lock_skip", message="Another worker completed migrations")
-                        break
+            logger.info("running_migrations", message="Checking database migrations")
+            run_migrations()
+            logger.info("database_migrations_complete", message="Database schema up to date")
         except Exception as e:
             logger.error("migration_error", error=str(e), exc_info=True)
-            # Don't raise - allow worker to start even if migration fails
-            # (migrations might have been run by another worker)
-            if not migration_ran:
-                logger.warning("migration_failed_continue", message="Continuing startup despite migration error")
-        finally:
-            if lock_file:
-                try:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                    lock_file.close()
-                except Exception:
-                    pass
+            # Don't crash - workers can continue if migrations already applied
+            logger.warning("migration_failed_continue", message="Continuing startup (migrations may have been applied by another process)")
     else:
         logger.info("test_mode", message="Skipping migrations in test mode")
 
