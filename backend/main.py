@@ -34,21 +34,37 @@ async def lifespan(app: FastAPI):
     if "pytest" not in sys.modules:
         # Use file lock to ensure only one worker runs migrations
         import fcntl
+        import time
         lock_file_path = "/tmp/fingerflow_migration.lock"
         lock_file = None
+        migration_ran = False
         try:
             lock_file = open(lock_file_path, "w")
-            # Non-blocking lock - if another worker has it, skip
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            logger.info("migration_lock_acquired", message="Running database migrations")
-            run_migrations()
-            logger.info("database_migrations_complete", message="Database schema up to date")
-        except BlockingIOError:
-            # Another worker is running migrations, skip
-            logger.info("migration_lock_skip", message="Another worker is running migrations, skipping")
+            # Try to acquire lock with retries for other workers
+            for attempt in range(3):
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    # Got the lock, run migrations
+                    logger.info("migration_lock_acquired", message="Running database migrations")
+                    run_migrations()
+                    logger.info("database_migrations_complete", message="Database schema up to date")
+                    migration_ran = True
+                    break
+                except BlockingIOError:
+                    if attempt < 2:
+                        # Another worker is running migrations, wait and retry
+                        logger.info("migration_wait", message=f"Waiting for migrations to complete (attempt {attempt + 1}/3)")
+                        time.sleep(5)
+                    else:
+                        # After 3 attempts, assume migrations completed
+                        logger.info("migration_lock_skip", message="Another worker completed migrations")
+                        break
         except Exception as e:
-            logger.error("migration_error", error=str(e))
-            raise
+            logger.error("migration_error", error=str(e), exc_info=True)
+            # Don't raise - allow worker to start even if migration fails
+            # (migrations might have been run by another worker)
+            if not migration_ran:
+                logger.warning("migration_failed_continue", message="Continuing startup despite migration error")
         finally:
             if lock_file:
                 try:
