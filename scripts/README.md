@@ -5,8 +5,14 @@ Quick reference for Docker management scripts.
 ## 🚀 Quick Commands
 
 ```bash
-# Production
-./scripts/deploy.sh          # Full deployment workflow
+# Production Deployment (Traefik)
+./scripts/deploy-prod.sh      # Full production deployment with health checks
+./scripts/health-check.sh     # Comprehensive health monitoring
+./scripts/backup-db.sh        # Backup PostgreSQL database
+./scripts/restore-db.sh <file> # Restore from backup
+
+# Standard Deployment (Standalone)
+./scripts/deploy.sh           # Full deployment workflow
 ./scripts/build.sh            # Build images
 ./scripts/start.sh --detach   # Start in background
 ./scripts/stop.sh             # Stop services
@@ -215,6 +221,152 @@ git pull
 - **Health checks**: Services may take 10-30 seconds to become healthy
 - **Logs location**: Use `./scripts/logs.sh` instead of looking for log files
 
+## 🌐 Production Deployment Scripts
+
+### deploy-prod.sh
+**Complete production deployment behind Traefik** on fingerflow.zitek.cloud.
+
+```bash
+./scripts/deploy-prod.sh
+```
+
+**Features:**
+- Environment validation (checks for required secrets)
+- Automatic database backup before deployment
+- Zero-downtime rebuild and restart
+- Health check verification
+- Migration status check
+- Colored output with progress indicators
+
+**Requirements:**
+- `.env` file configured with production settings
+- Traefik running with external `proxy` network
+- DNS pointing to server
+
+### health-check.sh
+**Comprehensive production health monitoring.**
+
+```bash
+./scripts/health-check.sh
+```
+
+**Checks:**
+- Docker container status
+- Backend health endpoint
+- Frontend availability
+- Public URL accessibility
+- Security headers presence
+- Database connectivity
+- Disk space usage
+- Container resource usage
+- Recent error logs
+
+**Output:** Color-coded report with ✅/❌ status indicators
+
+### backup-db.sh
+**PostgreSQL database backup with compression.**
+
+```bash
+./scripts/backup-db.sh
+```
+
+**Features:**
+- Compressed backup (pg_dump -Fc format)
+- Automatic retention (keeps last 7 days)
+- Timestamped filenames
+- Size reporting
+
+**Backups stored in:** `./backups/fingerflow_backup_YYYYMMDD_HHMMSS.dump`
+
+**Automated backups:** Add to crontab for daily backups:
+```bash
+0 2 * * * /opt/fingerflow/scripts/backup-db.sh >> /var/log/fingerflow-backup.log 2>&1
+```
+
+### restore-db.sh
+**Restore PostgreSQL database from backup.**
+
+```bash
+./scripts/restore-db.sh ./backups/fingerflow_backup_20231215_020000.dump
+```
+
+**Features:**
+- Safety confirmation prompt
+- Automatic safety backup before restore
+- Stops backend during restore (prevents data corruption)
+- Health check after restore
+- Automatic rollback on failure
+
+**⚠️  WARNING:** This replaces current database! Always verify backup file before restoring.
+
+## 🔄 Production Deployment Workflow
+
+### Initial Production Setup
+
+```bash
+# 1. SSH to production server
+ssh user@your-server-ip
+
+# 2. Clone repository
+cd /opt
+sudo git clone https://github.com/your-org/fingerflow.git
+cd fingerflow
+
+# 3. Configure environment
+cp .env.production.template .env
+nano .env  # Add production secrets
+
+# 4. Deploy
+./scripts/deploy-prod.sh
+
+# 5. Verify health
+./scripts/health-check.sh
+```
+
+### Regular Updates
+
+```bash
+# 1. Pull latest code
+cd /opt/fingerflow
+git pull origin main
+
+# 2. Deploy
+./scripts/deploy-prod.sh
+
+# 3. Monitor
+./scripts/health-check.sh
+docker compose logs -f
+```
+
+### Emergency Rollback
+
+```bash
+# 1. Find previous working commit
+git log --oneline
+
+# 2. Checkout previous version
+git checkout <commit-hash>
+
+# 3. Redeploy
+./scripts/deploy-prod.sh
+```
+
+### Database Backup & Restore
+
+```bash
+# Manual backup
+./scripts/backup-db.sh
+
+# List backups
+ls -lh ./backups/
+
+# Restore from backup
+./scripts/restore-db.sh ./backups/fingerflow_backup_20231215_020000.dump
+```
+
 ## 📚 More Information
 
-For detailed documentation, see [DOCKER.md](../DOCKER.md) in the project root.
+- **Production Deployment Guide**: See [PRODUCTION_DEPLOYMENT.md](../PRODUCTION_DEPLOYMENT.md)
+- **Security Features**: See [SECURITY_HARDENING.md](../SECURITY_HARDENING.md)
+- **Docker Guide**: See [DOCKER.md](../DOCKER.md)
+- **Architecture**: See [CLAUDE.md](../CLAUDE.md)

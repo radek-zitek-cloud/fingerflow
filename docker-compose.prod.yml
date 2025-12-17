@@ -1,0 +1,121 @@
+# Production Docker Compose Configuration
+# Deploy behind Traefik on fingerflow.zitek.cloud
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   - Traefik running with 'proxy' network
+#   - .env file configured with production settings
+#   - DOMAIN environment variable set (default: fingerflow.zitek.cloud)
+
+services:
+  postgres:
+    # PostgreSQL - Internal only, not exposed to Traefik
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - fingerflow-network
+    restart: unless-stopped
+
+  backend:
+    # FastAPI Backend - Exposed via Traefik
+    image: fingerflow-backend:prod
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fingerflow-backend
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://fingerflow:${POSTGRES_PASSWORD}@postgres:5432/fingerflow
+      - SECRET_KEY=${SECRET_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=https://${DOMAIN:-fingerflow.zitek.cloud}/auth/google/callback
+      - CORS_ORIGINS=https://${DOMAIN:-fingerflow.zitek.cloud}
+      - FRONTEND_URL=https://${DOMAIN:-fingerflow.zitek.cloud}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - HTTPS_REDIRECT_ENABLED=false  # Traefik handles HTTPS
+      - SECURITY_HEADERS_ENABLED=true
+      - CSRF_PROTECTION_ENABLED=true
+      - AUTH_RATE_LIMIT_ENABLED=true
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-smtp}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@fingerflow.zitek.cloud}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-FingerFlow}
+    depends_on:
+      - postgres
+    networks:
+      - proxy
+      - fingerflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # API routes (/api/*, /auth/*, /health, /)
+      - "traefik.http.routers.fingerflow-api.rule=Host(`${DOMAIN:-fingerflow.zitek.cloud}`) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`) || Path(`/`))"
+      - "traefik.http.routers.fingerflow-api.priority=10"
+      - "traefik.http.routers.fingerflow-api.entrypoints=websecure"
+      - "traefik.http.routers.fingerflow-api.tls.certresolver=lehttp"
+      - "traefik.http.services.fingerflow-api.loadbalancer.server.port=8000"
+      # Security headers middleware (optional, if not handled by Traefik globally)
+      - "traefik.http.middlewares.fingerflow-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.fingerflow-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.fingerflow-security.headers.stsPreload=true"
+      - "traefik.http.routers.fingerflow-api.middlewares=fingerflow-security"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    # React Frontend - Served via nginx, exposed via Traefik
+    image: fingerflow-frontend:prod
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_URL=https://${DOMAIN:-fingerflow.zitek.cloud}
+    container_name: fingerflow-frontend
+    depends_on:
+      - backend
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # Frontend catches all other routes (lower priority)
+      - "traefik.http.routers.fingerflow.rule=Host(`${DOMAIN:-fingerflow.zitek.cloud}`)"
+      - "traefik.http.routers.fingerflow.priority=1"
+      - "traefik.http.routers.fingerflow.entrypoints=websecure"
+      - "traefik.http.routers.fingerflow.tls.certresolver=lehttp"
+      - "traefik.http.services.fingerflow.loadbalancer.server.port=80"
+      # Security headers for frontend
+      - "traefik.http.routers.fingerflow.middlewares=fingerflow-security"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  fingerflow-network:
+    driver: bridge
+    name: fingerflow-network
+  proxy:
+    external: true
+
+volumes:
+  postgres-data:
+    name: fingerflow-postgres-data
