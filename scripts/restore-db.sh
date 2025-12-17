@@ -47,7 +47,7 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 
 # Check if postgres container is running
-if ! docker compose ps postgres | grep -q "Up"; then
+if ! docker ps | grep -q "fingerflow-postgres"; then
     echo -e "${RED}❌ Error: PostgreSQL container is not running${NC}"
     exit 1
 fi
@@ -55,19 +55,19 @@ fi
 # Stop backend to prevent writes during restore
 echo ""
 echo -e "${YELLOW}🛑 Stopping backend...${NC}"
-docker compose stop backend
+docker stop fingerflow-backend
 
 # Create a safety backup of current state
 echo ""
 echo -e "${YELLOW}📦 Creating safety backup of current state...${NC}"
 SAFETY_BACKUP="./backups/pre_restore_$(date +%Y%m%d_%H%M%S).dump"
-docker compose exec -T postgres pg_dump -U fingerflow -Fc fingerflow > "$SAFETY_BACKUP"
+docker exec fingerflow-postgres pg_dump -U fingerflow -Fc fingerflow > "$SAFETY_BACKUP"
 echo -e "${GREEN}✅ Safety backup created: $SAFETY_BACKUP${NC}"
 
 # Restore database
 echo ""
 echo -e "${YELLOW}🔄 Restoring database from backup...${NC}"
-cat "$BACKUP_FILE" | docker compose exec -T postgres pg_restore -U fingerflow -d fingerflow -c --if-exists
+cat "$BACKUP_FILE" | docker exec -i fingerflow-postgres pg_restore -U fingerflow -d fingerflow -c --if-exists
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Database restored successfully${NC}"
@@ -75,7 +75,7 @@ else
     echo -e "${RED}❌ Restore failed!${NC}"
     echo ""
     echo "Rolling back to safety backup..."
-    cat "$SAFETY_BACKUP" | docker compose exec -T postgres pg_restore -U fingerflow -d fingerflow -c --if-exists
+    cat "$SAFETY_BACKUP" | docker exec -i fingerflow-postgres pg_restore -U fingerflow -d fingerflow -c --if-exists
     echo "Restore rolled back. Check logs for errors."
     exit 1
 fi
@@ -83,7 +83,7 @@ fi
 # Restart backend
 echo ""
 echo -e "${YELLOW}🚀 Restarting backend...${NC}"
-docker compose start backend
+docker start fingerflow-backend
 
 # Wait for backend to be healthy
 echo -e "${YELLOW}⏳ Waiting for backend to be healthy...${NC}"
@@ -92,14 +92,14 @@ sleep 5
 max_attempts=15
 attempt=0
 while [ $attempt -lt $max_attempts ]; do
-    if docker compose exec -T backend curl -f http://localhost:8000/health > /dev/null 2>&1; then
+    if docker exec fingerflow-backend curl -f http://localhost:8000/health > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Backend is healthy${NC}"
         break
     fi
     attempt=$((attempt + 1))
     if [ $attempt -eq $max_attempts ]; then
         echo -e "${RED}❌ Backend health check failed${NC}"
-        echo "Check logs with: docker compose logs backend"
+        echo "Check logs with: docker logs fingerflow-backend"
         exit 1
     fi
     sleep 2

@@ -20,15 +20,16 @@ echo -e "${YELLOW}📦 Starting database backup...${NC}"
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_DIR"
 
-# Check if postgres container is running
-if ! docker compose ps postgres | grep -q "Up"; then
+# Check if postgres container is running (try both standalone and merged compose files)
+if ! docker ps | grep -q "fingerflow-postgres"; then
     echo "❌ Error: PostgreSQL container is not running"
+    echo "Start it with: docker compose -f docker-compose.prod-standalone.yml up -d"
     exit 1
 fi
 
-# Create compressed backup
+# Create compressed backup (use docker exec directly, not docker compose)
 echo "Creating backup: $BACKUP_FILE"
-docker compose exec -T postgres pg_dump -U fingerflow -Fc fingerflow > "$BACKUP_FILE"
+docker exec fingerflow-postgres pg_dump -U fingerflow -Fc fingerflow > "$BACKUP_FILE"
 
 if [ $? -eq 0 ]; then
     # Get backup size
