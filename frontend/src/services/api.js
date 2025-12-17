@@ -7,6 +7,65 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+// Token refresh state management
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+/**
+ * Add callback to queue for execution after token refresh
+ */
+function subscribeTokenRefresh(callback) {
+  refreshSubscribers.push(callback);
+}
+
+/**
+ * Notify all queued callbacks that token has been refreshed
+ */
+function onTokenRefreshed(newToken) {
+  refreshSubscribers.forEach(callback => callback(newToken));
+  refreshSubscribers = [];
+}
+
+/**
+ * Decode JWT token to extract payload (without verification)
+ * This is safe because we only use it for expiration checking
+ * Server still validates the token on every request
+ */
+function decodeJWT(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Failed to decode JWT:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if token is expired or will expire soon
+ * @param {number} bufferMinutes - Minutes before expiration to consider expired
+ */
+export function isTokenExpiringSoon(bufferMinutes = 5) {
+  const token = getAuthToken();
+  if (!token) return true;
+
+  const payload = decodeJWT(token);
+  if (!payload || !payload.exp) return true;
+
+  const expirationTime = payload.exp * 1000; // Convert to milliseconds
+  const bufferTime = bufferMinutes * 60 * 1000;
+  const now = Date.now();
+
+  return now >= expirationTime - bufferTime;
+}
+
 /**
  * Get authentication token from localStorage
  */
@@ -19,6 +78,12 @@ function getAuthToken() {
  */
 export function setAuthToken(token) {
   localStorage.setItem('auth_token', token);
+
+  // Store token expiration time for easier checking
+  const payload = decodeJWT(token);
+  if (payload && payload.exp) {
+    localStorage.setItem('token_expiration', payload.exp.toString());
+  }
 }
 
 /**
@@ -26,12 +91,14 @@ export function setAuthToken(token) {
  */
 export function clearAuthToken() {
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('token_expiration');
 }
 
 /**
  * Generic fetch wrapper with error handling and auth injection
+ * Automatically refreshes token on 401 errors and retries the request
  */
-async function fetchWithAuth(url, options = {}) {
+async function fetchWithAuth(url, options = {}, retryCount = 0) {
   const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -46,6 +113,40 @@ async function fetchWithAuth(url, options = {}) {
     ...options,
     headers,
   });
+
+  // Handle 401 Unauthorized - try to refresh token and retry
+  if (response.status === 401 && retryCount === 0 && url !== '/auth/refresh') {
+    try {
+      // If already refreshing, wait for it to complete
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh(newToken => {
+            // Retry original request with new token
+            fetchWithAuth(url, options, retryCount + 1)
+              .then(resolve)
+              .catch(reject);
+          });
+        });
+      }
+
+      // Start refresh process
+      isRefreshing = true;
+      const refreshData = await authAPI.refreshToken();
+      isRefreshing = false;
+
+      // Notify all waiting requests
+      onTokenRefreshed(refreshData.access_token);
+
+      // Retry original request with new token
+      return fetchWithAuth(url, options, retryCount + 1);
+    } catch (refreshError) {
+      isRefreshing = false;
+      // Refresh failed - clear tokens and force re-login
+      clearAuthToken();
+      localStorage.removeItem('refresh_token');
+      throw new Error('Session expired. Please log in again.');
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Unknown error' }));

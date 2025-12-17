@@ -87,6 +87,16 @@ export function useTelemetry(sessionId, sessionStartTime) {
       // Clear localStorage backup on successful send
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
+      // If session was deleted (404), don't cache for retry - just log and continue
+      const is404 = error.message?.includes('not found') || error.message?.includes('404');
+
+      if (is404) {
+        console.warn('Session not found during telemetry flush (likely aborted):', sessionId);
+        // Don't cache events for deleted sessions
+        return;
+      }
+
+      // For other errors (network, server issues), cache and retry
       console.error('Failed to send telemetry batch:', error);
 
       // Cache failed events in localStorage for retry

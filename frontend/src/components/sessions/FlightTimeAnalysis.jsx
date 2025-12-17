@@ -13,6 +13,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../../services/api';
 import { Hand, Keyboard, TrendingDown, TrendingUp, Zap } from 'lucide-react';
+import {
+  calculateFlightTimeMetrics,
+  calculateFlightTimeThresholds,
+  getFlightSpeedColor,
+  getFlightConsistencyColor,
+  getFastestKeys,
+  getSlowestKeys
+} from '../../utils/flightTimeCalculator';
+import { keyboardLayout, keyLabels, leftHand, rightHand } from '../../utils/keyboardLayout';
 
 export function FlightTimeAnalysis({ sessionId, events }) {
   const [detailedTelemetry, setDetailedTelemetry] = useState(null);
@@ -62,7 +71,7 @@ export function FlightTimeAnalysis({ sessionId, events }) {
     if (!detailedTelemetry || !detailedTelemetry.events) return { metrics: null, thresholds: null };
 
     const metricsData = calculateFlightTimeMetrics(detailedTelemetry.events);
-    const thresholdsData = calculateThresholds(metricsData);
+    const thresholdsData = calculateFlightTimeThresholds(metricsData);
 
     return { metrics: metricsData, thresholds: thresholdsData };
   }, [detailedTelemetry]);
@@ -183,23 +192,6 @@ export function FlightTimeAnalysis({ sessionId, events }) {
 
 // Finger visualization component
 function FingerView({ fingerMetrics, thresholds }) {
-  // Define finger layout for visual representation
-  const leftHand = [
-    { finger: 'L_PINKY', label: 'Pinky', row: 1 },
-    { finger: 'L_RING', label: 'Ring', row: 0 },
-    { finger: 'L_MIDDLE', label: 'Middle', row: 0 },
-    { finger: 'L_INDEX', label: 'Index', row: 1 },
-    { finger: 'L_THUMB', label: 'Thumb', row: 2 },
-  ];
-
-  const rightHand = [
-    { finger: 'R_THUMB', label: 'Thumb', row: 2 },
-    { finger: 'R_INDEX', label: 'Index', row: 1 },
-    { finger: 'R_MIDDLE', label: 'Middle', row: 0 },
-    { finger: 'R_RING', label: 'Ring', row: 0 },
-    { finger: 'R_PINKY', label: 'Pinky', row: 1 },
-  ];
-
   return (
     <div className="glass-panel p-8 rounded-xl">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -334,109 +326,6 @@ function FingerColumn({ label, metric, row, thresholds }) {
 
 // Keyboard visualization component
 function KeyboardView({ keyMetrics, thresholds }) {
-  // Complete ANSI keyboard layout
-  const keyboardLayout = [
-    // Number row with Backspace
-    [
-      { code: 'Backquote', width: 1 },
-      { code: 'Digit1', width: 1 },
-      { code: 'Digit2', width: 1 },
-      { code: 'Digit3', width: 1 },
-      { code: 'Digit4', width: 1 },
-      { code: 'Digit5', width: 1 },
-      { code: 'Digit6', width: 1 },
-      { code: 'Digit7', width: 1 },
-      { code: 'Digit8', width: 1 },
-      { code: 'Digit9', width: 1 },
-      { code: 'Digit0', width: 1 },
-      { code: 'Minus', width: 1 },
-      { code: 'Equal', width: 1 },
-      { code: 'Backspace', width: 2 },
-    ],
-    // Tab + QWERTY row
-    [
-      { code: 'Tab', width: 1.5 },
-      { code: 'KeyQ', width: 1 },
-      { code: 'KeyW', width: 1 },
-      { code: 'KeyE', width: 1 },
-      { code: 'KeyR', width: 1 },
-      { code: 'KeyT', width: 1 },
-      { code: 'KeyY', width: 1 },
-      { code: 'KeyU', width: 1 },
-      { code: 'KeyI', width: 1 },
-      { code: 'KeyO', width: 1 },
-      { code: 'KeyP', width: 1 },
-      { code: 'BracketLeft', width: 1 },
-      { code: 'BracketRight', width: 1 },
-      { code: 'Backslash', width: 1.5 },
-    ],
-    // Caps Lock + ASDF row
-    [
-      { code: 'CapsLock', width: 1.75 },
-      { code: 'KeyA', width: 1 },
-      { code: 'KeyS', width: 1 },
-      { code: 'KeyD', width: 1 },
-      { code: 'KeyF', width: 1 },
-      { code: 'KeyG', width: 1 },
-      { code: 'KeyH', width: 1 },
-      { code: 'KeyJ', width: 1 },
-      { code: 'KeyK', width: 1 },
-      { code: 'KeyL', width: 1 },
-      { code: 'Semicolon', width: 1 },
-      { code: 'Quote', width: 1 },
-      { code: 'Enter', width: 2.25 },
-    ],
-    // Shift + ZXCV row
-    [
-      { code: 'ShiftLeft', width: 2.25 },
-      { code: 'KeyZ', width: 1 },
-      { code: 'KeyX', width: 1 },
-      { code: 'KeyC', width: 1 },
-      { code: 'KeyV', width: 1 },
-      { code: 'KeyB', width: 1 },
-      { code: 'KeyN', width: 1 },
-      { code: 'KeyM', width: 1 },
-      { code: 'Comma', width: 1 },
-      { code: 'Period', width: 1 },
-      { code: 'Slash', width: 1 },
-      { code: 'ShiftRight', width: 2.75 },
-    ],
-    // Bottom row (modifiers and space)
-    [
-      { code: 'ControlLeft', width: 1.25 },
-      { code: 'MetaLeft', width: 1.25 },
-      { code: 'AltLeft', width: 1.25 },
-      { code: 'Space', width: 6.25 },
-      { code: 'AltRight', width: 1.25 },
-      { code: 'MetaRight', width: 1.25 },
-      { code: 'ContextMenu', width: 1.25 },
-      { code: 'ControlRight', width: 1.25 },
-    ],
-  ];
-
-  const keyLabels = {
-    // Numbers and symbols
-    'Backquote': '`', 'Digit1': '1', 'Digit2': '2', 'Digit3': '3', 'Digit4': '4',
-    'Digit5': '5', 'Digit6': '6', 'Digit7': '7', 'Digit8': '8', 'Digit9': '9', 'Digit0': '0',
-    'Minus': '-', 'Equal': '=', 'BracketLeft': '[', 'BracketRight': ']', 'Backslash': '\\',
-    'Semicolon': ';', 'Quote': "'", 'Comma': ',', 'Period': '.', 'Slash': '/',
-    // Modifiers and special keys
-    'Space': 'Space',
-    'Backspace': 'Backspace',
-    'Tab': 'Tab',
-    'CapsLock': 'Caps',
-    'Enter': 'Enter',
-    'ShiftLeft': 'Shift',
-    'ShiftRight': 'Shift',
-    'ControlLeft': 'Ctrl',
-    'ControlRight': 'Ctrl',
-    'AltLeft': 'Alt',
-    'AltRight': 'Alt',
-    'MetaLeft': 'Win',
-    'MetaRight': 'Win',
-    'ContextMenu': 'Menu',
-  };
-
   return (
     <div className="glass-panel p-8 rounded-xl">
       <h3 className="text-lg font-semibold mb-6 text-center" style={{ color: 'var(--text-main)' }}>
@@ -544,150 +433,4 @@ function KeyButton({ keyCode, label, metric, width = 1, thresholds }) {
       )}
     </div>
   );
-}
-
-// Algorithm: Calculate flight time metrics from detailed telemetry
-function calculateFlightTimeMetrics(events) {
-  const flightTimes = {}; // Map of key_code -> array of flight times
-  const fingerFlightTimes = {}; // Map of finger -> array of flight times
-
-  // Get only DOWN events
-  const downEvents = events.filter(event => event.event_type === 'DOWN');
-
-  // Calculate flight time between consecutive DOWN events
-  for (let i = 1; i < downEvents.length; i++) {
-    const prevEvent = downEvents[i - 1];
-    const currEvent = downEvents[i];
-
-    const flightTime = currEvent.timestamp_offset - prevEvent.timestamp_offset;
-
-    // Skip unrealistic values (negative or extremely large)
-    // Also skip very long pauses (>2 seconds likely means user paused)
-    if (flightTime >= 0 && flightTime < 2000) {
-      // Store by key (current key being pressed)
-      if (!flightTimes[currEvent.key_code]) {
-        flightTimes[currEvent.key_code] = [];
-      }
-      flightTimes[currEvent.key_code].push(flightTime);
-
-      // Store by finger (current finger being used)
-      if (!fingerFlightTimes[currEvent.finger_used]) {
-        fingerFlightTimes[currEvent.finger_used] = [];
-      }
-      fingerFlightTimes[currEvent.finger_used].push(flightTime);
-    }
-  }
-
-  // Calculate statistics for each key
-  const perKey = {};
-  for (const [keyCode, times] of Object.entries(flightTimes)) {
-    perKey[keyCode] = calculateStats(times);
-  }
-
-  // Calculate statistics for each finger
-  const perFinger = {};
-  for (const [finger, times] of Object.entries(fingerFlightTimes)) {
-    perFinger[finger] = calculateStats(times);
-  }
-
-  return { perKey, perFinger };
-}
-
-// Calculate statistics (avg, std dev, min, max) for an array of values
-function calculateStats(values) {
-  if (values.length === 0) {
-    return { count: 0, avg: 0, stdDev: 0, min: 0, max: 0 };
-  }
-
-  const count = values.length;
-  const avg = values.reduce((sum, val) => sum + val, 0) / count;
-  const variance = values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / count;
-  const stdDev = Math.sqrt(variance);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-
-  return { count, avg, stdDev, min, max };
-}
-
-// Calculate dynamic thresholds from metrics
-function calculateThresholds(metrics) {
-  // Collect all average and stdDev values
-  const allAvgs = [];
-  const allStdDevs = [];
-
-  // Collect from perFinger
-  Object.values(metrics.perFinger).forEach(metric => {
-    if (metric && metric.count > 0) {
-      allAvgs.push(metric.avg);
-      allStdDevs.push(metric.stdDev);
-    }
-  });
-
-  // Collect from perKey
-  Object.values(metrics.perKey).forEach(metric => {
-    if (metric && metric.count > 0) {
-      allAvgs.push(metric.avg);
-      allStdDevs.push(metric.stdDev);
-    }
-  });
-
-  // Calculate quintiles (5 equal portions)
-  const speedMin = Math.min(...allAvgs);
-  const speedMax = Math.max(...allAvgs);
-  const speedRange = speedMax - speedMin;
-  const speedStep = speedRange / 5;
-
-  const consistencyMin = Math.min(...allStdDevs);
-  const consistencyMax = Math.max(...allStdDevs);
-  const consistencyRange = consistencyMax - consistencyMin;
-  const consistencyStep = consistencyRange / 5;
-
-  return {
-    speed: [
-      speedMin + speedStep * 1,
-      speedMin + speedStep * 2,
-      speedMin + speedStep * 3,
-      speedMin + speedStep * 4,
-    ],
-    consistency: [
-      consistencyMin + consistencyStep * 1,
-      consistencyMin + consistencyStep * 2,
-      consistencyMin + consistencyStep * 3,
-      consistencyMin + consistencyStep * 4,
-    ],
-  };
-}
-
-// Get color based on flight time speed (average) with dynamic thresholds
-function getFlightSpeedColor(avgFlightTime, thresholds) {
-  if (avgFlightTime < thresholds[0]) return '#10b981'; // Green - fastest
-  if (avgFlightTime < thresholds[1]) return '#eab308'; // Yellow - fast
-  if (avgFlightTime < thresholds[2]) return '#f59e0b'; // Orange - medium
-  if (avgFlightTime < thresholds[3]) return '#ef4444'; // Red - slow
-  return '#9333ea'; // Purple - slowest
-}
-
-// Get color based on flight time consistency (standard deviation) with dynamic thresholds
-function getFlightConsistencyColor(stdDev, thresholds) {
-  if (stdDev < thresholds[0]) return '#10b981'; // Green - most consistent
-  if (stdDev < thresholds[1]) return '#eab308'; // Yellow - consistent
-  if (stdDev < thresholds[2]) return '#f59e0b'; // Orange - variable
-  if (stdDev < thresholds[3]) return '#ef4444'; // Red - inconsistent
-  return '#9333ea'; // Purple - most inconsistent
-}
-
-// Get fastest keys sorted by average flight time
-function getFastestKeys(keyMetrics, limit) {
-  return Object.entries(keyMetrics)
-    .filter(([_, metric]) => metric.count >= 3) // Only keys with at least 3 transitions
-    .sort((a, b) => a[1].avg - b[1].avg)
-    .slice(0, limit);
-}
-
-// Get slowest keys sorted by average flight time
-function getSlowestKeys(keyMetrics, limit) {
-  return Object.entries(keyMetrics)
-    .filter(([_, metric]) => metric.count >= 3) // Only keys with at least 3 transitions
-    .sort((a, b) => b[1].avg - a[1].avg)
-    .slice(0, limit);
 }

@@ -47,10 +47,10 @@ class SessionEnd(BaseModel):
     end_time: int = Field(..., description="Unix timestamp in milliseconds of last keystroke")
     wpm: float = Field(..., ge=0, description="Productive WPM (only correct characters)")
     mechanical_wpm: float = Field(..., ge=0, description="Mechanical WPM (all keystrokes)")
-    accuracy: float = Field(..., ge=0, le=100, description="Accuracy percentage")
+    accuracy: float = Field(..., ge=0, le=100, description="Accuracy percentage (characters correct on first attempt / total characters typed)")
     total_characters: int = Field(..., ge=0, description="Total characters in the test text")
-    correct_characters: int = Field(..., ge=0, description="Number of correctly typed characters")
-    incorrect_characters: int = Field(..., ge=0, description="Number of incorrectly typed characters")
+    correct_characters: int = Field(..., ge=0, description="Total characters typed (includes corrected characters)")
+    incorrect_characters: int = Field(..., ge=0, description="Unique character positions with errors (repeated typos at same position count as one)")
     total_keystrokes: int = Field(..., ge=0, description="Total keystrokes including corrections")
     practice_text: str = Field(
         ...,

@@ -12,6 +12,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { sessionsAPI } from '../../services/api';
 import { Hand, Keyboard, AlertTriangle, CheckCircle } from 'lucide-react';
+import {
+  calculateErrorMetrics,
+  calculateErrorThresholds,
+  getErrorColor,
+  getKeysWithFewestErrors,
+  getKeysWithMostErrors
+} from '../../utils/errorMetricsCalculator';
+import { keyboardLayout, keyLabels, leftHand, rightHand } from '../../utils/keyboardLayout';
 
 export function ErrorAnalysis({ sessionId, events }) {
   const [detailedTelemetry, setDetailedTelemetry] = useState(null);
@@ -61,7 +69,7 @@ export function ErrorAnalysis({ sessionId, events }) {
     if (!detailedTelemetry || !detailedTelemetry.events) return { metrics: null, thresholds: null };
 
     const metricsData = calculateErrorMetrics(detailedTelemetry.events);
-    const thresholdsData = calculateThresholds(metricsData);
+    const thresholdsData = calculateErrorThresholds(metricsData);
 
     return { metrics: metricsData, thresholds: thresholdsData };
   }, [detailedTelemetry]);
@@ -159,23 +167,6 @@ export function ErrorAnalysis({ sessionId, events }) {
 
 // Finger visualization component
 function FingerView({ fingerMetrics, thresholds, totalErrors }) {
-  // Define finger layout for visual representation
-  const leftHand = [
-    { finger: 'L_PINKY', label: 'Pinky', row: 1 },
-    { finger: 'L_RING', label: 'Ring', row: 0 },
-    { finger: 'L_MIDDLE', label: 'Middle', row: 0 },
-    { finger: 'L_INDEX', label: 'Index', row: 1 },
-    { finger: 'L_THUMB', label: 'Thumb', row: 2 },
-  ];
-
-  const rightHand = [
-    { finger: 'R_THUMB', label: 'Thumb', row: 2 },
-    { finger: 'R_INDEX', label: 'Index', row: 1 },
-    { finger: 'R_MIDDLE', label: 'Middle', row: 0 },
-    { finger: 'R_RING', label: 'Ring', row: 0 },
-    { finger: 'R_PINKY', label: 'Pinky', row: 1 },
-  ];
-
   return (
     <div className="glass-panel p-8 rounded-xl">
       {/* Total Errors Summary */}
@@ -305,109 +296,6 @@ function FingerColumn({ label, metric, row, thresholds }) {
 
 // Keyboard visualization component
 function KeyboardView({ keyMetrics, thresholds, totalErrors }) {
-  // Complete ANSI keyboard layout
-  const keyboardLayout = [
-    // Number row with Backspace
-    [
-      { code: 'Backquote', width: 1 },
-      { code: 'Digit1', width: 1 },
-      { code: 'Digit2', width: 1 },
-      { code: 'Digit3', width: 1 },
-      { code: 'Digit4', width: 1 },
-      { code: 'Digit5', width: 1 },
-      { code: 'Digit6', width: 1 },
-      { code: 'Digit7', width: 1 },
-      { code: 'Digit8', width: 1 },
-      { code: 'Digit9', width: 1 },
-      { code: 'Digit0', width: 1 },
-      { code: 'Minus', width: 1 },
-      { code: 'Equal', width: 1 },
-      { code: 'Backspace', width: 2 },
-    ],
-    // Tab + QWERTY row
-    [
-      { code: 'Tab', width: 1.5 },
-      { code: 'KeyQ', width: 1 },
-      { code: 'KeyW', width: 1 },
-      { code: 'KeyE', width: 1 },
-      { code: 'KeyR', width: 1 },
-      { code: 'KeyT', width: 1 },
-      { code: 'KeyY', width: 1 },
-      { code: 'KeyU', width: 1 },
-      { code: 'KeyI', width: 1 },
-      { code: 'KeyO', width: 1 },
-      { code: 'KeyP', width: 1 },
-      { code: 'BracketLeft', width: 1 },
-      { code: 'BracketRight', width: 1 },
-      { code: 'Backslash', width: 1.5 },
-    ],
-    // Caps Lock + ASDF row
-    [
-      { code: 'CapsLock', width: 1.75 },
-      { code: 'KeyA', width: 1 },
-      { code: 'KeyS', width: 1 },
-      { code: 'KeyD', width: 1 },
-      { code: 'KeyF', width: 1 },
-      { code: 'KeyG', width: 1 },
-      { code: 'KeyH', width: 1 },
-      { code: 'KeyJ', width: 1 },
-      { code: 'KeyK', width: 1 },
-      { code: 'KeyL', width: 1 },
-      { code: 'Semicolon', width: 1 },
-      { code: 'Quote', width: 1 },
-      { code: 'Enter', width: 2.25 },
-    ],
-    // Shift + ZXCV row
-    [
-      { code: 'ShiftLeft', width: 2.25 },
-      { code: 'KeyZ', width: 1 },
-      { code: 'KeyX', width: 1 },
-      { code: 'KeyC', width: 1 },
-      { code: 'KeyV', width: 1 },
-      { code: 'KeyB', width: 1 },
-      { code: 'KeyN', width: 1 },
-      { code: 'KeyM', width: 1 },
-      { code: 'Comma', width: 1 },
-      { code: 'Period', width: 1 },
-      { code: 'Slash', width: 1 },
-      { code: 'ShiftRight', width: 2.75 },
-    ],
-    // Bottom row (modifiers and space)
-    [
-      { code: 'ControlLeft', width: 1.25 },
-      { code: 'MetaLeft', width: 1.25 },
-      { code: 'AltLeft', width: 1.25 },
-      { code: 'Space', width: 6.25 },
-      { code: 'AltRight', width: 1.25 },
-      { code: 'MetaRight', width: 1.25 },
-      { code: 'ContextMenu', width: 1.25 },
-      { code: 'ControlRight', width: 1.25 },
-    ],
-  ];
-
-  const keyLabels = {
-    // Numbers and symbols
-    'Backquote': '`', 'Digit1': '1', 'Digit2': '2', 'Digit3': '3', 'Digit4': '4',
-    'Digit5': '5', 'Digit6': '6', 'Digit7': '7', 'Digit8': '8', 'Digit9': '9', 'Digit0': '0',
-    'Minus': '-', 'Equal': '=', 'BracketLeft': '[', 'BracketRight': ']', 'Backslash': '\\',
-    'Semicolon': ';', 'Quote': "'", 'Comma': ',', 'Period': '.', 'Slash': '/',
-    // Modifiers and special keys
-    'Space': 'Space',
-    'Backspace': 'Backspace',
-    'Tab': 'Tab',
-    'CapsLock': 'Caps',
-    'Enter': 'Enter',
-    'ShiftLeft': 'Shift',
-    'ShiftRight': 'Shift',
-    'ControlLeft': 'Ctrl',
-    'ControlRight': 'Ctrl',
-    'AltLeft': 'Alt',
-    'AltRight': 'Alt',
-    'MetaLeft': 'Win',
-    'MetaRight': 'Win',
-    'ContextMenu': 'Menu',
-  };
-
   return (
     <div className="glass-panel p-8 rounded-xl">
       {/* Total Errors Summary */}
@@ -527,117 +415,4 @@ function KeyButton({ label, metric, width = 1, thresholds }) {
       )}
     </div>
   );
-}
-
-// Algorithm: Calculate error metrics from detailed telemetry
-// Returns error rate (%) and absolute count for normalization
-function calculateErrorMetrics(events) {
-  const errorsByFinger = {}; // Map of finger -> error count
-  const errorsByKey = {}; // Map of key_code -> error count
-  const totalByFinger = {}; // Map of finger -> total keystrokes
-  const totalByKey = {}; // Map of key_code -> total keystrokes
-  let totalErrors = 0;
-  let totalKeystrokes = 0;
-
-  // Count errors and totals per finger and per key
-  for (const event of events) {
-    if (event.event_type === 'DOWN') {
-      totalKeystrokes++;
-
-      const finger = event.finger_used;
-      const keyCode = event.key_code;
-
-      // Count total keystrokes
-      totalByFinger[finger] = (totalByFinger[finger] || 0) + 1;
-      totalByKey[keyCode] = (totalByKey[keyCode] || 0) + 1;
-
-      // Count errors
-      if (event.is_error) {
-        totalErrors++;
-        errorsByFinger[finger] = (errorsByFinger[finger] || 0) + 1;
-        errorsByKey[keyCode] = (errorsByKey[keyCode] || 0) + 1;
-      }
-    }
-  }
-
-  // Calculate error rates (percentage) for fingers
-  const fingerMetrics = {};
-  for (const finger in totalByFinger) {
-    const errors = errorsByFinger[finger] || 0;
-    const total = totalByFinger[finger];
-    fingerMetrics[finger] = {
-      errorRate: (errors / total) * 100,
-      errorCount: errors,
-      totalKeystrokes: total,
-    };
-  }
-
-  // Calculate error rates (percentage) for keys
-  const keyMetrics = {};
-  for (const keyCode in totalByKey) {
-    const errors = errorsByKey[keyCode] || 0;
-    const total = totalByKey[keyCode];
-    keyMetrics[keyCode] = {
-      errorRate: (errors / total) * 100,
-      errorCount: errors,
-      totalKeystrokes: total,
-    };
-  }
-
-  return {
-    perFinger: fingerMetrics,
-    perKey: keyMetrics,
-    totalErrors: totalErrors,
-    totalKeystrokes: totalKeystrokes,
-  };
-}
-
-// Calculate dynamic thresholds based on error rates (percentages)
-function calculateThresholds(metrics) {
-  // Collect all error rates
-  const allRates = [
-    ...Object.values(metrics.perFinger).map(m => m.errorRate),
-    ...Object.values(metrics.perKey).map(m => m.errorRate),
-  ];
-
-  if (allRates.length === 0) {
-    return [0, 0, 0, 0];
-  }
-
-  // Calculate quintiles (5 equal portions) based on error rates
-  const min = Math.min(...allRates);
-  const max = Math.max(...allRates);
-  const range = max - min;
-  const step = range / 5;
-
-  return [
-    min + step * 1,
-    min + step * 2,
-    min + step * 3,
-    min + step * 4,
-  ];
-}
-
-// Get color based on error rate (percentage) with dynamic thresholds
-function getErrorColor(errorRate, thresholds) {
-  if (errorRate === 0) return '#10b981'; // Green - no errors
-  if (errorRate <= thresholds[0]) return '#10b981'; // Green - lowest rate
-  if (errorRate <= thresholds[1]) return '#eab308'; // Yellow - low rate
-  if (errorRate <= thresholds[2]) return '#f59e0b'; // Orange - medium rate
-  if (errorRate <= thresholds[3]) return '#ef4444'; // Red - high rate
-  return '#9333ea'; // Purple - highest rate
-}
-
-// Get keys with lowest error rates
-function getKeysWithFewestErrors(keyMetrics, limit) {
-  return Object.entries(keyMetrics)
-    .sort((a, b) => a[1].errorRate - b[1].errorRate)
-    .slice(0, limit);
-}
-
-// Get keys with highest error rates
-function getKeysWithMostErrors(keyMetrics, limit) {
-  return Object.entries(keyMetrics)
-    .sort((a, b) => b[1].errorRate - a[1].errorRate)
-    .slice(0, limit);
 }

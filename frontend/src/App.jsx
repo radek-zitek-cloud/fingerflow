@@ -10,73 +10,14 @@ import { Navbar } from './components/layout/Navbar';
 import { AuthPage } from './components/auth/AuthPage';
 import { ProfileSettings } from './components/profile/ProfileSettings';
 import { WordSetManager } from './components/word_sets/WordSetManager';
-import { TickerTape } from './components/TickerTape';
-import { RollingWindow } from './components/RollingWindow';
-import { VirtualKeyboard } from './components/VirtualKeyboard';
-import { SessionHistory } from './components/sessions/SessionHistory';
+import { WelcomeSection } from './components/typing/WelcomeSection';
+import { TypingTestUI } from './components/typing/TypingTestUI';
 import { SessionDetail } from './components/sessions/SessionDetail';
 import { MultiSessionAnalysis } from './components/sessions/MultiSessionAnalysis';
-import { SessionProgressChart } from './components/sessions/SessionProgressChart';
-import { TypingStatistics } from './components/sessions/TypingStatistics';
 import { useTelemetry } from './hooks/useTelemetry';
 import { sessionsAPI, wordSetsAPI } from './services/api';
-import { Activity, Target, Trophy, TrendingUp } from 'lucide-react';
 import { playClickSound, playErrorBeep, resumeAudioContext } from './utils/audioFeedback';
-
-/**
- * Generate random text from word sets
- * @param {number} wordCount - Number of words to generate
- * @param {number|null} wordSetId - Specific word set ID to use, or null for random
- * @param {Array} availableWordSets - Array of available word sets
- * @returns {Promise<string>} - Generated text string
- */
-async function generateRandomText(wordCount = 20, wordSetId = null, availableWordSets = []) {
-  try {
-    // Fetch available word sets if not provided
-    let wordSets = availableWordSets;
-    if (!wordSets || wordSets.length === 0) {
-      wordSets = await wordSetsAPI.list(0, 100);
-    }
-
-    if (!wordSets || wordSets.length === 0) {
-      // Fallback to default text if no word sets available
-      return 'the quick brown fox jumps over the lazy dog practice your typing skills with finger flow';
-    }
-
-    // Pick specific word set or random
-    let selectedSet;
-    if (wordSetId) {
-      selectedSet = wordSets.find(set => set.id === wordSetId);
-      if (!selectedSet) {
-        // If specified word set not found, pick random
-        selectedSet = wordSets[Math.floor(Math.random() * wordSets.length)];
-      }
-    } else {
-      // Pick random word set
-      selectedSet = wordSets[Math.floor(Math.random() * wordSets.length)];
-    }
-
-    const words = selectedSet.words || [];
-
-    if (words.length === 0) {
-      return 'the quick brown fox jumps over the lazy dog practice your typing skills with finger flow';
-    }
-
-    // Generate random selection of words
-    const selectedWords = [];
-    for (let i = 0; i < wordCount; i++) {
-      const randomWord = words[Math.floor(Math.random() * words.length)];
-      selectedWords.push(randomWord);
-    }
-
-    // Join words with spaces
-    return selectedWords.join(' ');
-  } catch (error) {
-    console.error('Failed to generate random text:', error);
-    // Fallback text
-    return 'the quick brown fox jumps over the lazy dog practice your typing skills with finger flow';
-  }
-}
+import { generateRandomText } from './utils/textGenerator';
 
 function App() {
   const { isAuthenticated, loading, checkAuth, user } = useAuth();
@@ -316,6 +257,17 @@ function App() {
 
   // Abort session (delete without saving)
   const abortSession = async () => {
+    // Flush any remaining telemetry before deleting session
+    // This ensures partial session data is preserved for analytics
+    if (sessionId) {
+      try {
+        await flush();
+      } catch (error) {
+        // Ignore flush errors on abort (session might already be gone)
+        console.warn('Telemetry flush failed during abort:', error);
+      }
+    }
+
     // Delete session from backend if authenticated
     if (isAuthenticated && sessionId) {
       try {
@@ -352,16 +304,22 @@ function App() {
 
   // Calculate WPM and accuracy (for display during typing)
   const calculateStats = () => {
-    const correctCount = Object.values(characterStates).filter(s => s === 'correct' || s === 'corrected').length;
-    // Use totalErrors to include corrected mistakes in accuracy calculation
-    const totalTyped = correctCount + totalErrors;
-    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 100;
+    // Count characters by state
+    const correctOnFirstAttempt = Object.values(characterStates).filter(s => s === 'correct').length;
+    const correctedAfterErrors = Object.values(characterStates).filter(s => s === 'corrected').length;
+    const totalCharactersTyped = correctOnFirstAttempt + correctedAfterErrors;
+
+    // NEW: Accuracy based on unique character positions with errors
+    // Repeated typos at same position count as only one error
+    const accuracy = totalCharactersTyped > 0
+      ? (correctOnFirstAttempt / totalCharactersTyped) * 100
+      : 100;
 
     // Use time from first to current keystroke
     const elapsedMinutes = firstKeystrokeTime ? (Date.now() - firstKeystrokeTime) / 60000 : 0;
 
     // Productive WPM: correct and corrected characters
-    const productiveWPM = elapsedMinutes > 0 ? (correctCount / 5) / elapsedMinutes : 0;
+    const productiveWPM = elapsedMinutes > 0 ? (totalCharactersTyped / 5) / elapsedMinutes : 0;
 
     // Mechanical WPM: all keystrokes
     const mechanicalWPM = elapsedMinutes > 0 ? (totalKeystrokes / 5) / elapsedMinutes : 0;
@@ -370,17 +328,23 @@ function App() {
       wpm: Math.round(productiveWPM),
       mechanicalWPM: Math.round(mechanicalWPM),
       accuracy: Math.round(accuracy),
-      correctCount,
-      errorCount: totalErrors
+      correctCount: totalCharactersTyped,
+      errorCount: characterErrorHistory.size // Unique positions with errors
     };
   };
 
   // Calculate final stats (for session end)
   const calculateFinalStats = () => {
-    const correctCount = Object.values(characterStates).filter(s => s === 'correct' || s === 'corrected').length;
-    // Use totalErrors to include corrected mistakes
-    const totalTyped = correctCount + totalErrors;
-    const accuracy = totalTyped > 0 ? (correctCount / totalTyped) * 100 : 100;
+    // Count characters by state
+    const correctOnFirstAttempt = Object.values(characterStates).filter(s => s === 'correct').length;
+    const correctedAfterErrors = Object.values(characterStates).filter(s => s === 'corrected').length;
+    const totalCharactersTyped = correctOnFirstAttempt + correctedAfterErrors;
+
+    // NEW: Accuracy based on unique character positions with errors
+    // Repeated typos at same position count as only one error
+    const accuracy = totalCharactersTyped > 0
+      ? (correctOnFirstAttempt / totalCharactersTyped) * 100
+      : 100;
 
     // Use time from first to last keystroke
     const elapsedMinutes = (firstKeystrokeTime && lastKeystrokeTime)
@@ -388,7 +352,7 @@ function App() {
       : 0;
 
     // Productive WPM: correct and corrected characters
-    const productiveWPM = elapsedMinutes > 0 ? (correctCount / 5) / elapsedMinutes : 0;
+    const productiveWPM = elapsedMinutes > 0 ? (totalCharactersTyped / 5) / elapsedMinutes : 0;
 
     // Mechanical WPM: all keystrokes
     const mechanicalWPM = elapsedMinutes > 0 ? (totalKeystrokes / 5) / elapsedMinutes : 0;
@@ -397,8 +361,8 @@ function App() {
       productiveWPM,
       mechanicalWPM,
       accuracy,
-      correctCount,
-      errorCount: totalErrors,
+      correctCount: totalCharactersTyped,
+      errorCount: characterErrorHistory.size, // Unique positions with errors
     };
   };
 
@@ -684,502 +648,50 @@ function App() {
         <main className="flex-1 container mx-auto p-4 md:p-8 relative z-10">
           {/* Welcome Section */}
           {!startTime && (
-            <div className="max-w-5xl mx-auto text-center py-16 md:py-4">
-
-              
-              <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight leading-tight" style={{ color: 'var(--text-main)' }}>
-                Master Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-hover)]">Flow</span>
-              </h1>
-              
-              <p className="text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed" style={{ color: 'var(--text-dim)' }}>
-                FingerFlow captures every biomechanical nuance of your typing.
-                Analyze dwell times, flight latency, and finger efficiency in real-time.
-              </p>
-
-              {/* Session Configuration */}
-              <div className="mb-12 max-w-4xl mx-auto">
-                {/* Mode Toggle and Preset Options */}
-                <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
-                  {/* Mode Toggle */}
-                  <div className="p-1 rounded-xl glass-panel flex gap-1">
-                    <button
-                      onClick={() => setSessionMode('wordcount')}
-                      className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
-                        sessionMode === 'wordcount' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'hover:bg-[var(--bg-input)]'
-                      }`}
-                      style={sessionMode !== 'wordcount' ? { color: 'var(--text-dim)' } : {}}
-                    >
-                      Word Count
-                    </button>
-                    <button
-                      onClick={() => setSessionMode('timed')}
-                      className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
-                        sessionMode === 'timed' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'hover:bg-[var(--bg-input)]'
-                      }`}
-                      style={sessionMode !== 'timed' ? { color: 'var(--text-dim)' } : {}}
-                    >
-                      Timed
-                    </button>
-                  </div>
-
-                  {/* Word Count Mode Options */}
-                  {sessionMode === 'wordcount' && (
-                    <>
-                      {[20, 40, 120].map(count => (
-                        <button
-                          key={count}
-                          onClick={() => setWordCount(count)}
-                          className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
-                            wordCount === count ? 'bg-[var(--accent-glow)] border-2 border-[var(--accent-primary)]' : 'glass-panel hover:bg-[var(--bg-input)]'
-                          }`}
-                          style={{ color: 'var(--text-main)' }}
-                        >
-                          {count}
-                        </button>
-                      ))}
-                      <div className="flex gap-2 items-center">
-                        <input
-                          type="number"
-                          min="1"
-                          max="500"
-                          placeholder="..."
-                          value={sessionMode === 'wordcount' && ![20, 40, 120].includes(wordCount) ? wordCount : customInput}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setCustomInput(value);
-                            // Update wordCount immediately if valid (for spinner arrows)
-                            const numValue = parseInt(value);
-                            if (!isNaN(numValue) && numValue >= 1 && numValue <= 500) {
-                              setWordCount(numValue);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const value = parseInt(customInput);
-                              if (value >= 1 && value <= 500) {
-                                setWordCount(value);
-                                setCustomInput('');
-                                e.target.blur();
-                              }
-                            }
-                          }}
-                          onBlur={() => {
-                            const value = parseInt(customInput);
-                            if (value >= 1 && value <= 500) {
-                              setWordCount(value);
-                            }
-                            setCustomInput('');
-                          }}
-                          className="px-3 py-2.5 rounded-lg font-medium w-20 text-center glass-panel"
-                          style={{
-                            backgroundColor: 'var(--bg-input)',
-                            color: 'var(--text-main)',
-                            border: '1px solid var(--key-border)',
-                            MozAppearance: 'textfield',
-                            WebkitAppearance: 'none',
-                            appearance: 'none'
-                          }}
-                        />
-                        <span className="text-sm" style={{ color: 'var(--text-dim)' }}>words</span>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Timed Mode Options */}
-                  {sessionMode === 'timed' && (
-                    <>
-                      {[15, 30, 60].map(duration => (
-                        <button
-                          key={duration}
-                          onClick={() => setTimedDuration(duration)}
-                          className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
-                            timedDuration === duration ? 'bg-[var(--accent-glow)] border-2 border-[var(--accent-primary)]' : 'glass-panel hover:bg-[var(--bg-input)]'
-                          }`}
-                          style={{ color: 'var(--text-main)' }}
-                        >
-                          {duration}s
-                        </button>
-                      ))}
-                      <div className="flex gap-2 items-center">
-                        <input
-                          type="number"
-                          min="1"
-                          max="300"
-                          placeholder="..."
-                          value={sessionMode === 'timed' && ![15, 30, 60].includes(timedDuration) ? timedDuration : customInput}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setCustomInput(value);
-                            // Update timedDuration immediately if valid (for spinner arrows)
-                            const numValue = parseInt(value);
-                            if (!isNaN(numValue) && numValue >= 1 && numValue <= 300) {
-                              setTimedDuration(numValue);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const value = parseInt(customInput);
-                              if (value >= 1 && value <= 300) {
-                                setTimedDuration(value);
-                                setCustomInput('');
-                                e.target.blur();
-                              }
-                            }
-                          }}
-                          onBlur={() => {
-                            const value = parseInt(customInput);
-                            if (value >= 1 && value <= 300) {
-                              setTimedDuration(value);
-                            }
-                            setCustomInput('');
-                          }}
-                          className="px-3 py-2.5 rounded-lg font-medium w-20 text-center glass-panel"
-                          style={{
-                            backgroundColor: 'var(--bg-input)',
-                            color: 'var(--text-main)',
-                            border: '1px solid var(--key-border)',
-                            MozAppearance: 'textfield',
-                            WebkitAppearance: 'none',
-                            appearance: 'none'
-                          }}
-                        />
-                        <span className="text-sm" style={{ color: 'var(--text-dim)' }}>seconds</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* View Mode and Word Set Selector Row */}
-                <div className="flex flex-wrap items-center justify-center gap-6 mb-6">
-                  {/* View Mode Selector */}
-                  <div className="p-1 rounded-xl glass-panel flex gap-1">
-                    <button
-                      onClick={() => setViewMode('ticker')}
-                      className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
-                        viewMode === 'ticker' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'hover:bg-[var(--bg-input)]'
-                      }`}
-                      style={viewMode !== 'ticker' ? { color: 'var(--text-dim)' } : {}}
-                    >
-                      Ticker Tape
-                    </button>
-                    <button
-                      onClick={() => setViewMode('rolling')}
-                      className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
-                        viewMode === 'rolling' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'hover:bg-[var(--bg-input)]'
-                      }`}
-                      style={viewMode !== 'rolling' ? { color: 'var(--text-dim)' } : {}}
-                    >
-                      Rolling Window
-                    </button>
-                  </div>
-
-                  {/* Word Set Selector */}
-                  {wordSets.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={selectedWordSetId || ''}
-                        onChange={(e) => setSelectedWordSetId(parseInt(e.target.value))}
-                        className="px-4 py-2.5 rounded-lg font-medium glass-panel"
-                        style={{
-                          backgroundColor: 'var(--bg-input)',
-                          color: 'var(--text-main)',
-                          border: '2px solid var(--key-border)',
-                          maxWidth: '250px'
-                        }}
-                      >
-                        {wordSets.map(set => (
-                          <option key={set.id} value={set.id}>
-                            {set.name} ({set.words?.length || 0} words)
-                          </option>
-                        ))}
-                      </select>
-                      {isAuthenticated && (
-                        <button
-                          onClick={() => setCurrentPage('word-sets')}
-                          className="px-4 py-2.5 rounded-lg font-medium glass-panel hover:bg-[var(--bg-input)] transition-colors"
-                          style={{
-                            color: 'var(--text-main)',
-                            border: '1px solid var(--key-border)'
-                          }}
-                        >
-                          Manage
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Start Button */}
-              <button
-                onClick={startSession}
-                className="group relative px-12 py-5 text-xl rounded-xl font-bold transition-all hover:scale-105 shadow-[var(--shadow-glow)]"
-                style={{
-                  backgroundColor: 'var(--accent-primary)',
-                  color: 'white',
-                }}
-              >
-                <span className="relative z-10 flex items-center gap-3">
-                  Start Diagnostics
-                  <TrendingUp className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                </span>
-                <div className="absolute inset-0 rounded-xl bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
-              </button>
-
-              {!isAuthenticated && (
-                <p className="mt-6 text-sm font-medium" style={{ color: 'var(--text-dim)' }}>
-                  <button
-                    onClick={() => setCurrentPage('auth')}
-                    className="underline hover:text-[var(--accent-primary)] transition-colors"
-                  >
-                    Sign in
-                  </button>
-                  {' '}to save detailed analytics
-                </p>
-              )}
-
-              {/* Progress Chart, Statistics, and Session History for Authenticated Users */}
-              {isAuthenticated && (
-                <div className="mt-16 space-y-16">
-                  <SessionProgressChart />
-                  <TypingStatistics />
-                  <SessionHistory
-                    onNavigateToDetail={handleNavigateToSessionDetail}
-                    onNavigateToMultiSession={handleNavigateToMultiSession}
-                  />
-                </div>
-              )}
-
-              {/* Features Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-20">
-                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
-                    <Activity className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                  </div>
-                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
-                    Latency Tracking
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
-                    Precision measurement of keydown-to-keyup intervals.
-                  </p>
-                </div>
-
-                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
-                    <Target className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                  </div>
-                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
-                    Finger Mapping
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
-                    Heatmaps and efficiency scores for each finger.
-                  </p>
-                </div>
-
-                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
-                    <TrendingUp className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                  </div>
-                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
-                    Biomechanics
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
-                    Analyze flight time and digraph transitions.
-                  </p>
-                </div>
-
-                <div className="p-8 glass-panel rounded-2xl feature-card text-left">
-                  <div className="w-12 h-12 rounded-xl bg-[var(--bg-input)] flex items-center justify-center mb-6">
-                    <Trophy className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                  </div>
-                  <h3 className="font-bold text-lg mb-3" style={{ color: 'var(--text-main)' }}>
-                    Skill Evolution
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-dim)' }}>
-                    Watch your motor memory improve over time.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <WelcomeSection
+              sessionMode={sessionMode}
+              setSessionMode={setSessionMode}
+              timedDuration={timedDuration}
+              setTimedDuration={setTimedDuration}
+              wordCount={wordCount}
+              setWordCount={setWordCount}
+              customInput={customInput}
+              setCustomInput={setCustomInput}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              selectedWordSetId={selectedWordSetId}
+              setSelectedWordSetId={setSelectedWordSetId}
+              wordSets={wordSets}
+              isAuthenticated={isAuthenticated}
+              onManageWordSets={() => setCurrentPage('word-sets')}
+              onStartSession={startSession}
+              onNavigateToAuth={() => setCurrentPage('auth')}
+              onNavigateToSessionDetail={handleNavigateToSessionDetail}
+              onNavigateToMultiSession={handleNavigateToMultiSession}
+            />
           )}
 
-          {/* Typing Area */}
-          {startTime && !isComplete && (
-            <div className="max-w-6xl mx-auto py-12">
-              {/* Stats Header */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Productive WPM</p>
-                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--accent-primary)' }}>
-                    {stats.wpm}
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>Correct chars only</p>
-                </div>
-                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Mechanical WPM</p>
-                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--text-main)' }}>
-                    {stats.mechanicalWPM}
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>All keystrokes</p>
-                </div>
-                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
-                  <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--status-correct)' }}>
-                    {stats.accuracy}%
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{stats.correctCount}/{stats.correctCount + stats.errorCount}</p>
-                </div>
-                <div className="p-6 glass-panel rounded-2xl shadow-[var(--shadow-lg)] text-center">
-                  {sessionMode === 'timed' ? (
-                    <>
-                      <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Time Remaining</p>
-                      <p className="text-3xl md:text-4xl font-black" style={{
-                        color: timeRemaining !== null && timeRemaining <= 5 ? 'var(--status-error)' : 'var(--text-main)'
-                      }}>
-                        {timeRemaining !== null ? timeRemaining : timedDuration}s
-                      </p>
-                      <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
-                        of {timedDuration}s
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Progress</p>
-                      <p className="text-3xl md:text-4xl font-black" style={{ color: 'var(--text-main)' }}>
-                        {practiceText ? Math.round((currentIndex / practiceText.length) * 100) : 0}%
-                      </p>
-                      <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{currentIndex}/{practiceText.length}</p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Typing Display */}
-              <div className="mb-12 relative">
-                {viewMode === 'ticker' ? (
-                  <TickerTape
-                    text={practiceText}
-                    currentIndex={currentIndex}
-                    characterStates={characterStates}
-                  />
-                ) : (
-                  <RollingWindow
-                    text={practiceText}
-                    currentIndex={currentIndex}
-                    characterStates={characterStates}
-                  />
-                )}
-              </div>
-
-              {/* Virtual Keyboard */}
-              <div className="mb-10">
-                <VirtualKeyboard activeKey={lastKeyCode} />
-              </div>
-
-              {/* End Test Button */}
-              <div className="text-center">
-                <button
-                  onClick={abortSession}
-                  className="px-8 py-2.5 rounded-lg border hover:bg-[var(--bg-input)] transition-colors font-medium text-sm tracking-wide"
-                  style={{
-                    borderColor: 'var(--key-border)',
-                    color: 'var(--text-dim)',
-                  }}
-                >
-                  ABORT SESSION
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Results Screen */}
-          {isComplete && (
-            <div className="max-w-3xl mx-auto text-center py-20">
-              <div className="mb-12 celebrate-icon">
-                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-[var(--accent-glow)] flex items-center justify-center">
-                  <Trophy className="w-12 h-12" style={{ color: 'var(--accent-primary)' }} />
-                </div>
-                <h2 className="text-5xl font-bold mb-4" style={{ color: 'var(--text-main)' }}>
-                  Session Complete
-                </h2>
-                <p className="text-xl" style={{ color: 'var(--text-dim)' }}>Analysis report generated successfully.</p>
-              </div>
-
-              {/* Final Stats */}
-              <div className="grid grid-cols-2 gap-6 mb-12">
-                <div className="p-8 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Productive WPM</p>
-                  <div className="flex items-baseline justify-center gap-2">
-                    <p className="text-6xl font-black" style={{ color: 'var(--accent-primary)' }}>
-                      {stats.wpm}
-                    </p>
-                    <span className="text-lg font-medium opacity-60" style={{ color: 'var(--text-main)' }}>WPM</span>
-                  </div>
-                  <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-dim)' }}>Correct characters only</p>
-                </div>
-                <div className="p-8 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Mechanical WPM</p>
-                  <div className="flex items-baseline justify-center gap-2">
-                    <p className="text-6xl font-black" style={{ color: 'var(--text-main)' }}>
-                      {stats.mechanicalWPM}
-                    </p>
-                    <span className="text-lg font-medium opacity-60" style={{ color: 'var(--text-main)' }}>WPM</span>
-                  </div>
-                  <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-dim)' }}>All keystrokes ({totalKeystrokes} total)</p>
-                </div>
-                <div className="p-6 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Accuracy</p>
-                  <p className="text-5xl font-bold" style={{ color: 'var(--status-correct)' }}>
-                    {stats.accuracy}%
-                  </p>
-                  <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>{stats.correctCount} correct / {stats.errorCount} errors</p>
-                </div>
-                <div className="p-6 glass-panel rounded-2xl">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Time</p>
-                  <p className="text-5xl font-bold" style={{ color: 'var(--text-main)' }}>
-                    {firstKeystrokeTime && lastKeystrokeTime ?
-                      Math.round((lastKeystrokeTime - firstKeystrokeTime) / 1000) : 0}
-                  </p>
-                  <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>seconds</p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-4 justify-center">
-                <button
-                  onClick={saveSession}
-                  className="px-10 py-4 rounded-xl font-bold text-lg transition-all hover:scale-105 shadow-[var(--shadow-glow)]"
-                  style={{
-                    backgroundColor: 'var(--accent-primary)',
-                    color: 'white',
-                  }}
-                >
-                  {isAuthenticated ? 'Save Session' : 'Start New Session'}
-                </button>
-                <button
-                  onClick={abortSession}
-                  className="px-10 py-4 rounded-xl font-bold text-lg border-2 transition-all hover:bg-[var(--status-error)] hover:text-white"
-                  style={{
-                    borderColor: 'var(--status-error)',
-                    color: 'var(--status-error)',
-                  }}
-                >
-                  Abort Session
-                </button>
-                {!isAuthenticated && (
-                  <button
-                    onClick={() => setCurrentPage('auth')}
-                    className="px-10 py-4 rounded-xl font-bold text-lg border-2 transition-all hover:bg-[var(--accent-glow)]"
-                    style={{
-                      borderColor: 'var(--accent-primary)',
-                      color: 'var(--accent-primary)',
-                    }}
-                  >
-                    Login to Save
-                  </button>
-                )}
-              </div>
-            </div>
+          {/* Typing Test UI */}
+          {startTime && (
+            <TypingTestUI
+              isComplete={isComplete}
+              viewMode={viewMode}
+              practiceText={practiceText}
+              currentIndex={currentIndex}
+              characterStates={characterStates}
+              lastKeyCode={lastKeyCode}
+              stats={stats}
+              sessionMode={sessionMode}
+              timedDuration={timedDuration}
+              timeRemaining={timeRemaining}
+              totalKeystrokes={totalKeystrokes}
+              firstKeystrokeTime={firstKeystrokeTime}
+              lastKeystrokeTime={lastKeystrokeTime}
+              onAbort={abortSession}
+              onSave={saveSession}
+              onNavigateToAuth={() => setCurrentPage('auth')}
+              isAuthenticated={isAuthenticated}
+            />
           )}
         </main>
       )}
