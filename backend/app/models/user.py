@@ -80,6 +80,29 @@ class User(Base):
         comment="JSON array of backup codes"
     )
 
+    # Account Security & Lockout
+    failed_login_attempts: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        nullable=False,
+        comment="Count of consecutive failed login attempts"
+    )
+    account_locked_until: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Unix timestamp (ms) until which account is locked"
+    )
+    last_failed_login: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Timestamp of last failed login attempt (ms)"
+    )
+    last_successful_login: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Timestamp of last successful login (ms)"
+    )
+
     # Relationships
     sessions: Mapped[List["TypingSession"]] = relationship(
         "TypingSession",

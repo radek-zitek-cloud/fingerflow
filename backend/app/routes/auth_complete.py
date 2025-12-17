@@ -737,3 +737,25 @@ async def google_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google OAuth authentication failed"
         )
+
+
+@router.get("/csrf-token")
+async def get_csrf_token(current_user: User = Depends(get_current_user)):
+    """
+    Get a CSRF token for making state-changing requests.
+
+    The frontend should include this token in the X-CSRF-Token header
+    for POST, PUT, PATCH, DELETE requests.
+
+    Token is valid for 1 hour and is bound to the user's session.
+    """
+    from app.middleware.csrf_protection import generate_csrf_token
+
+    csrf_token = generate_csrf_token(session_id=str(current_user.id))
+
+    logger.debug("csrf_token_generated", user_id=current_user.id)
+
+    return {
+        "csrf_token": csrf_token,
+        "expires_in": 3600  # 1 hour in seconds
+    }

@@ -58,9 +58,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add rate limiting middleware
-from app.middleware.rate_limit import RateLimitMiddleware
+# Security Middleware (order matters - most specific first)
+# 1. HTTPS Redirect (if enabled in production)
+if settings.https_redirect_enabled:
+    from app.middleware.https_redirect import HTTPSRedirectMiddleware
+    app.add_middleware(HTTPSRedirectMiddleware, enabled=True)
+    logger.info("security_middleware_enabled", middleware="HTTPS Redirect")
 
+# 2. Security Headers
+if settings.security_headers_enabled:
+    from app.middleware.security_headers import SecurityHeadersMiddleware
+    app.add_middleware(SecurityHeadersMiddleware)
+    logger.info("security_middleware_enabled", middleware="Security Headers")
+
+# 3. CSRF Protection
+if settings.csrf_protection_enabled:
+    from app.middleware.csrf_protection import CSRFMiddleware
+    app.add_middleware(CSRFMiddleware, enabled=True)
+    logger.info("security_middleware_enabled", middleware="CSRF Protection")
+
+# 4. Auth-specific Rate Limiting (stricter limits for auth endpoints)
+if settings.auth_rate_limit_enabled:
+    from app.middleware.auth_rate_limit import AuthRateLimitMiddleware
+    app.add_middleware(AuthRateLimitMiddleware)
+    logger.info("security_middleware_enabled", middleware="Auth Rate Limiting")
+
+# 5. General Rate Limiting
+from app.middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
 
 

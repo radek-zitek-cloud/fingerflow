@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
 
+    # Security Settings
+    csrf_protection_enabled: bool = True
+    https_redirect_enabled: bool = False  # Enable in production
+    security_headers_enabled: bool = True
+    auth_rate_limit_enabled: bool = True
+
+    # Account Lockout
+    max_login_attempts: int = 5
+    lockout_duration_minutes: int = 15
+    lockout_reset_after_minutes: int = 60
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
