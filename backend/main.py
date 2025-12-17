@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.database import run_migrations
 from app.logging_config import configure_logging, get_logger
 
 # Configure structured logging
@@ -25,24 +24,14 @@ async def lifespan(app: FastAPI):
     Application lifespan manager.
 
     Handles startup and shutdown events:
-    - Startup: Initialize database tables
+    - Startup: Log worker initialization (migrations run in start-prod.sh)
     - Shutdown: Cleanup resources
     """
     # Startup
     logger.info("application_startup", message="Initializing FingerFlow backend")
-    # Avoid touching real local DB during tests (prevents sqlite file locks and keeps tests hermetic).
-    if "pytest" not in sys.modules:
-        # Run migrations (Alembic handles concurrency internally)
-        try:
-            logger.info("running_migrations", message="Checking database migrations")
-            run_migrations()
-            logger.info("database_migrations_complete", message="Database schema up to date")
-        except Exception as e:
-            logger.error("migration_error", error=str(e), exc_info=True)
-            # Don't crash - workers can continue if migrations already applied
-            logger.warning("migration_failed_continue", message="Continuing startup (migrations may have been applied by another process)")
-    else:
-        logger.info("test_mode", message="Skipping migrations in test mode")
+    # Note: Migrations are run in start-prod.sh BEFORE workers start
+    # This prevents race conditions with multiple workers
+    logger.info("worker_ready", message="Worker process ready")
 
     yield
 

@@ -39,6 +39,9 @@ COPY . .
 # Create data directory (for compatibility, though PostgreSQL is used)
 RUN mkdir -p /app/data
 
+# Make startup script executable
+RUN chmod +x start-prod.sh
+
 # Create non-root user for security
 RUN useradd -m -u 1000 fingerflow && \
     chown -R fingerflow:fingerflow /app
@@ -53,4 +56,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application with production settings
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Startup script runs migrations BEFORE starting workers (prevents race conditions)
+CMD ["./start-prod.sh"]
