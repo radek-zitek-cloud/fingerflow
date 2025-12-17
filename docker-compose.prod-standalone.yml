@@ -73,10 +73,6 @@ services:
       - "traefik.http.routers.fingerflow-api.entrypoints=websecure"
       - "traefik.http.routers.fingerflow-api.tls.certresolver=lehttp"
       - "traefik.http.services.fingerflow-api.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.fingerflow-security.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.fingerflow-security.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.fingerflow-security.headers.stsPreload=true"
-      - "traefik.http.routers.fingerflow-api.middlewares=fingerflow-security"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -105,7 +101,6 @@ services:
       - "traefik.http.routers.fingerflow.entrypoints=websecure"
       - "traefik.http.routers.fingerflow.tls.certresolver=lehttp"
       - "traefik.http.services.fingerflow.loadbalancer.server.port=80"
-      - "traefik.http.routers.fingerflow.middlewares=fingerflow-security"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
