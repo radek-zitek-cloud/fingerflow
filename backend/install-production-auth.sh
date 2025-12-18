@@ -95,9 +95,10 @@ if [ "$choice" = "1" ]; then
     echo -e "${GREEN}✓ Database will be recreated on next server start${NC}"
 elif [ "$choice" = "2" ]; then
     echo -e "${YELLOW}Keeping existing database${NC}"
-    echo -e "${YELLOW}Run Alembic migration manually:${NC}"
-    echo "  alembic revision --autogenerate -m 'Add production auth'"
-    echo "  alembic upgrade head"
+    echo -e "${YELLOW}Run migrations manually:${NC}"
+    echo "  python migrate.py"
+    echo "Or if using Docker:"
+    echo "  docker exec fingerflow-backend python migrate.py"
 fi
 
 echo ""

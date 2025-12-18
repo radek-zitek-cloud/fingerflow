@@ -126,30 +126,6 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def run_migrations() -> None:
-    """
-    Run Alembic migrations to ensure database schema is up to date.
-
-    This is called on application startup to automatically apply any pending migrations.
-    Uses Alembic's programmatic API to run migrations.
-    """
-    from alembic.config import Config
-    from alembic import command
-    import os
-
-    # Get the directory containing this file
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Go up one level to the backend directory
-    backend_dir = os.path.dirname(current_dir)
-    alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
-
-    # Create Alembic config
-    alembic_cfg = Config(alembic_ini_path)
-
-    # Run migrations
-    command.upgrade(alembic_cfg, "head")
-
-
 def get_db() -> Session:
     """
     FastAPI dependency for getting a database session.
