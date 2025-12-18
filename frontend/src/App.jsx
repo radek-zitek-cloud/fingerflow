@@ -698,7 +698,16 @@ function App() {
 
       {/* Footer */}
       <footer className="py-8 text-center border-t relative z-10" style={{ borderColor: 'var(--key-border)', color: 'var(--text-dim)' }}>
-        <p className="text-sm font-medium">FingerFlow v1.3.0 &bull; Biomechanical Typing Diagnostics</p>
+        <p className="text-sm font-medium mb-2">FingerFlow v1.3.0 &bull; Biomechanical Typing Diagnostics</p>
+        {isAuthenticated && (
+          <button
+            onClick={() => setCurrentPage('word-sets')}
+            className="text-xs hover:text-[var(--accent-primary)] transition-colors underline"
+            style={{ color: 'var(--text-dim)' }}
+          >
+            Manage Word Sets
+          </button>
+        )}
       </footer>
     </div>
   );}
